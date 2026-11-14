@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Doctor,Nurse,Admin" data-css="fullcalendar,sweetalert2,flatpickr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>التقويم</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="تقويم المواعيد" data-en-title="Appointments calendar">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-3 justify-content-between align-items-center border-bottom">
+        <div class="d-flex flex-wrap gap-3 smi-legend small">
+          <span><i style="background:#ff9f43"></i><span data-en="Pending">بانتظار الموافقة</span></span>
+          <span><i style="background:#0B7F7B"></i><span data-en="Confirmed">مؤكد</span></span>
+          <span><i style="background:#00bad1"></i><span data-en="Completed">مكتمل</span></span>
+          <span><i style="background:#808390"></i><span data-en="No show">لم يحضر</span></span>
+        </div>
+        <div class="d-flex gap-2">
+          <select class="form-select form-select-sm w-auto" id="doctorFilter"></select>
+          <button class="btn btn-sm btn-primary" id="addBtn"><i class="ti ti-plus me-1"></i><span data-en="Add appointment">إضافة موعد</span></button>
+        </div>
+      </div>
+      <div class="card-body pt-3"><div id="calendar"></div></div>
+    </div>
+
+    <!-- event details -->
+    <div class="modal fade" id="eventModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" data-en="Appointment">تفاصيل الموعد</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body" id="eventBody"></div>
+      </div></div>
+    </div>
+
+    <!-- add appointment -->
+    <div class="modal fade" id="addModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form id="addForm">
+          <div class="modal-header"><h5 class="modal-title" data-en="New appointment (confirmed)">موعد جديد (مؤكد مباشرة)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body">
+            <div class="mb-3 position-relative">
+              <label class="form-label" data-en="Patient (name or medical ID)">المريض (الاسم أو رقم الهوية)</label>
+              <input class="form-control" id="patientSearch" autocomplete="off" />
+              <input type="hidden" name="patient" />
+              <div class="list-group position-absolute w-100 shadow d-none" style="z-index:5" id="patientResults"></div>
+            </div>
+            <div class="mb-3" id="doctorRow"><label class="form-label" data-en="Doctor">الطبيب</label><select class="form-select" name="practitioner" id="doctorSelect"></select></div>
+            <div class="row g-3 mb-3">
+              <div class="col-7"><label class="form-label" data-en="Start">البداية</label><input class="form-control" name="start_at" id="startAt" required /></div>
+              <div class="col-5"><label class="form-label" data-en="Duration">المدة</label>
+                <select class="form-select" name="duration"><option value="15">15 د</option><option value="20">20 د</option><option value="30" selected>30 د</option><option value="45">45 د</option><option value="60">60 د</option></select></div>
+            </div>
+            <div><label class="form-label" data-en="Reason">السبب</label><input class="form-control" name="reason" /></div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal" data-en="Close">إغلاق</button><button class="btn btn-primary" type="submit" data-en="Save">حفظ</button></div>
+        </form>
+      </div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/assets/vendor/libs/flatpickr/flatpickr.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script src="/app/js/staff.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, role = App.role(), me = App.user(), doctors = [], cal;
+      var eventModal = new bootstrap.Modal('#eventModal'), addModal = new bootstrap.Modal('#addModal');
+      var docSel = App.$('#doctorFilter');
+
+      (role === 'Doctor' ? App.get('/doctors/assisted/') : role === 'Nurse' ? App.get('/doctors/assisted/').then(function (d) { return d.length ? d : App.all('/doctors/', { bookable: 1 }); }) : App.all('/doctors/', { bookable: 1 }))
+        .then(function (list) {
+          doctors = list;
+          docSel.innerHTML = (role === 'Doctor' ? '' : '<option value="">' + esc(t('كل الأطباء', 'All doctors')) + '</option>') +
+            list.map(function (d) { return '<option value="' + d.id + '">' + esc(t('د. ', 'Dr. ') + d.full_name) + '</option>'; }).join('');
+          App.$('#doctorSelect').innerHTML = list.map(function (d) { return '<option value="' + d.user_id + '" data-slot="' + d.slot_minutes + '">' + esc(t('د. ', 'Dr. ') + d.full_name) + '</option>'; }).join('');
+          if (role === 'Doctor') App.$('#doctorRow').classList.add('d-none');
+          init();
+        });
+
+      function businessHours() {
+        var d = doctors.find(function (x) { return String(x.id) === docSel.value; });
+        if (!d) return false;
+        return d.availability.map(function (a) { return { daysOfWeek: [(a.weekday + 1) % 7], startTime: a.start_time.slice(0, 5), endTime: a.end_time.slice(0, 5) }; });
+      }
+
+      function init() {
+        cal = new FullCalendar.Calendar(App.$('#calendar'), {
+          locale: App.lang() === 'ar' ? 'ar' : 'en-gb',
+          direction: App.lang() === 'ar' ? 'rtl' : 'ltr',
+          firstDay: 6,
+          initialView: window.innerWidth < 768 ? 'listWeek' : 'timeGridWeek',
+          headerToolbar: { start: 'prev,next today', center: 'title', end: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+          slotMinTime: '07:00:00', slotMaxTime: '22:00:00', allDaySlot: false, nowIndicator: true, height: 'auto', expandRows: true,
+          businessHours: businessHours(),
+          slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+          eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+          events: function (info, ok, fail) {
+            App.get('/appointments/calendar/', { start: info.startStr, end: info.endStr, doctor: docSel.value }).then(function (list) {
+              ok(list.map(function (e) {
+                return { id: e.id, title: e.title + (docSel.value ? '' : ' — ' + e.doctor), start: e.start, end: e.end, classNames: ['st-' + e.status], extendedProps: e };
+              }));
+            }, fail);
+          },
+          eventContent: function (arg) {
+            if (arg.view.type.indexOf('list') === 0) return { html: esc(arg.event.title) };
+            return { html: '<div class="fc-event-main-frame"><div class="fc-event-time"><span class="ltr">' + esc(App.fmtTime(arg.event.start) + ' – ' + App.fmtTime(arg.event.end)) +
+              '</span></div><div class="fc-event-title">' + esc(arg.event.title) + '</div></div>' };
+          },
+          eventClick: function (info) { showEvent(info.event.id); },
+          dateClick: function (info) { if (info.view.type !== 'dayGridMonth') openAdd(info.date); }
+        });
+        cal.render();
+      }
+
+      function showEvent(id) {
+        var body = App.$('#eventBody'); App.spinner(body); eventModal.show();
+        App.get('/appointments/' + id + '/').then(function (a) {
+          var future = new Date(a.start_at) > new Date();
+          body.innerHTML = '<div data-appt="' + a.id + '"><div class="d-flex gap-3 align-items-center mb-3">' + App.avatar(a.patient_name, 'primary', 'avatar-lg') +
+            '<div><h5 class="mb-0">' + esc(a.patient_name) + '</h5><span class="badge bg-label-secondary smi-id-number" style="font-size:.75rem">' + esc(a.patient_medical_id || '') + '</span></div></div>' +
+            '<p class="mb-1"><i class="ti ti-calendar ti-xs me-1 text-primary"></i>' + esc(App.fmtDay(a.start_at)) + '</p>' +
+            '<p class="mb-1"><i class="ti ti-clock ti-xs me-1 text-primary"></i><span class="ltr">' + esc(App.fmtTime(a.start_at) + ' - ' + App.fmtTime(a.end_at)) + '</span></p>' +
+            '<p class="mb-2"><i class="ti ti-stethoscope ti-xs me-1 text-primary"></i>' + esc(t('د. ', 'Dr. ') + (a.practitioner_full_name || '')) + '</p>' +
+            '<div class="mb-2">' + App.statusBadge(a.status) + '</div>' + (a.reason ? '<p class="small mb-1"><strong>' + esc(t('السبب: ', 'Reason: ')) + '</strong>' + esc(a.reason) + '</p>' : '') +
+            Staff.triageHtml(a) +
+            '<div class="d-flex flex-wrap gap-2 mt-3">' +
+            '<a class="btn btn-sm btn-label-primary" href="/staff/patient.html?id=' + a.patient + '"><i class="ti ti-file-description me-1"></i>' + esc(t('السجل الطبي', 'Medical record')) + '</a>' +
+            (a.status === 'PENDING' ? '<button class="btn btn-sm btn-success" data-act="approve">' + esc(t('موافقة', 'Approve')) + '</button><button class="btn btn-sm btn-label-danger" data-act="reject">' + esc(t('رفض', 'Reject')) + '</button>' : '') +
+            (a.status === 'CONFIRMED' ? '<button class="btn btn-sm btn-label-success" data-act="complete">' + esc(t('تمت المعاينة', 'Completed')) + '</button><button class="btn btn-sm btn-label-secondary" data-act="no-show">' + esc(t('لم يحضر', 'No-show')) + '</button>' : '') +
+            ((a.status === 'CONFIRMED' || a.status === 'PENDING') && future ? '<button class="btn btn-sm btn-label-danger" data-act="cancel">' + esc(t('إلغاء', 'Cancel')) + '</button>' : '') +
+            '</div></div>';
+          Staff.bind(body, function () { eventModal.hide(); cal.refetchEvents(); });
+        }).catch(function (e) { App.errorBox(body, e); });
+      }
+
+      var fp = flatpickr('#startAt', { enableTime: true, time_24hr: true, minuteIncrement: 5, dateFormat: 'Y-m-d H:i', locale: App.lang() === 'ar' ? 'ar' : 'default', disableMobile: true });
+      function openAdd(date) {
+        var f = App.$('#addForm'); f.reset(); f.elements.patient.value = ''; App.$('#patientResults').classList.add('d-none');
+        fp.setDate(date || new Date(), true);
+        var d = doctors.find(function (x) { return String(x.id) === docSel.value; });
+        if (d) App.$('#doctorSelect').value = d.user_id;
+        addModal.show();
+      }
+      App.$('#addBtn').onclick = function () { openAdd(); };
+      docSel.onchange = function () { if (cal) { cal.setOption('businessHours', businessHours()); cal.refetchEvents(); } };
+
+      var results = App.$('#patientResults');
+      App.$('#patientSearch').addEventListener('input', App.debounce(function () {
+        var q = this.value.trim(); App.$('#addForm').elements.patient.value = '';
+        if (q.length < 2) { results.classList.add('d-none'); return; }
+        App.get('/patients/', { search: q, page_size: 8 }).then(function (d) {
+          results.innerHTML = d.results.length ? d.results.map(function (p) {
+            return '<button type="button" class="list-group-item list-group-item-action" data-id="' + p.id + '" data-name="' + esc(p.name) + '">' + esc(p.name) +
+              ' <small class="text-muted ltr">' + esc(p.medical_id || '') + '</small></button>';
+          }).join('') : '<div class="list-group-item text-muted small">' + esc(t('لا نتائج', 'No results')) + '</div>';
+          results.classList.remove('d-none');
+          App.$$('[data-id]', results).forEach(function (b) {
+            b.onclick = function () { App.$('#addForm').elements.patient.value = b.dataset.id; App.$('#patientSearch').value = b.dataset.name; results.classList.add('d-none'); };
+          });
+        });
+      }, 300));
+
+      App.$('#addForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = this, d = App.formData(f), btn = f.querySelector('[type=submit]');
+        if (!d.patient) { App.toast(t('اختر المريض من نتائج البحث', 'Pick a patient from the results'), 'warning'); return; }
+        var start = fp.selectedDates[0]; if (!start) return;
+        var end = new Date(start.getTime() + d.duration * 60000);
+        var body = { patient: +d.patient, start_at: start.toISOString(), end_at: end.toISOString(), reason: d.reason };
+        if (role !== 'Doctor') body.practitioner = +d.practitioner;
+        App.busy(btn, true);
+        App.post('/appointments/', body).then(function () { addModal.hide(); App.toast(t('تمت إضافة الموعد', 'Appointment added')); cal.refetchEvents(); })
+          .catch(function (err) { App.formErrors(f, err); }).finally(function () { App.busy(btn, false); });
+      });
+      document.addEventListener('smi:notification', function (e) { if (cal && /APPOINTMENT/.test(e.detail.kind)) cal.refetchEvents(); });
+    })();
+  </script>
+</body>
+</html>

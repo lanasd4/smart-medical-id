@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style" data-roles="PendingDoctor">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>بانتظار التوثيق — الهوية الطبية الذكية</title>
+  <script src="/app/js/head.js"></script>
+</head>
+<body>
+  <div class="smi-auth">
+    <div class="card shadow-lg text-center">
+      <div class="card-body p-5">
+        <div class="avatar avatar-xl mx-auto mb-3"><span class="avatar-initial rounded-circle bg-label-warning"><i class="ti ti-hourglass-high ti-lg"></i></span></div>
+        <h4 class="mb-2" data-en="Your account is awaiting verification">حسابك بانتظار التوثيق</h4>
+        <p class="text-muted" data-en="The administration will review your licence. You will be able to receive bookings and view patient records once your account is verified.">ستراجع الإدارة بيانات ترخيصك. بعد توثيق الحساب ستتمكن من استقبال الحجوزات والاطلاع على سجلات المرضى.</p>
+        <div class="d-grid gap-2 mt-4">
+          <button class="btn btn-primary" id="checkBtn"><i class="ti ti-refresh me-1"></i><span data-en="Check again">تحقّق مجدداً</span></button>
+          <button class="btn btn-label-secondary" id="logoutBtn" data-en="Log out">تسجيل الخروج</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/app/js/core.js"></script>
+  <script>
+    App.applyI18n();
+    function check(silent) {
+      return App.get('/whoami/').then(function (me) {
+        App.setSession({ user: me });
+        if (me.role !== 'PendingDoctor') location.replace(App.homeFor(me.role));
+        else if (!silent) App.toast(App.t('ما زال الحساب بانتظار التوثيق', 'Still pending'), 'info');
+      });
+    }
+    App.$('#checkBtn').onclick = function () { check(false); };
+    App.$('#logoutBtn').onclick = App.logout;
+    check(true);
+  </script>
+</body>
+</html>

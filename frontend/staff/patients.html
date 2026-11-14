@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Doctor,Nurse,Admin" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>المرضى</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="المرضى" data-en-title="Patients">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="input-group input-group-merge" style="max-width:380px">
+          <span class="input-group-text"><i class="ti ti-search"></i></span>
+          <input class="form-control" id="search" placeholder="الاسم، رقم الهوية الطبية أو الهاتف" data-en-ph="Name, medical ID or phone" />
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <div class="form-check form-switch mb-0 d-none" id="inactiveWrap"><input class="form-check-input" type="checkbox" id="inactive" /><label class="form-check-label small" for="inactive" data-en="Include inactive">إظهار المعطّلين</label></div>
+          <button class="btn btn-primary" id="addBtn"><i class="ti ti-user-plus me-1"></i><span data-en="New patient">مريض جديد</span></button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th data-en="Patient">المريض</th><th data-en="Medical ID">رقم الهوية</th><th data-en="Age">العمر</th><th data-en="Blood">الزمرة</th><th data-en="Phone">الهاتف</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex justify-content-between align-items-center"><small class="text-muted" id="count"></small><div class="btn-group" id="pager"></div></div>
+    </div>
+
+    <div class="modal fade" id="addModal" tabindex="-1">
+      <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+        <form id="addForm">
+          <div class="modal-header"><h5 class="modal-title" data-en="Register a new patient">تسجيل مريض جديد</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body row g-3">
+            <div class="col-md-6"><label class="form-label" data-en="Full name">الاسم الكامل</label><input class="form-control" name="name" required /></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Date of birth">تاريخ الميلاد</label><input class="form-control" name="date_of_birth" type="date" /></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Gender">الجنس</label><select class="form-select" name="gender"><option value=""></option><option>ذكر</option><option>أنثى</option></select></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Blood type">زمرة الدم</label><select class="form-select" name="blood_type" id="bloodSel"></select></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Height (cm)">الطول (سم)</label><input class="form-control" name="height_cm" type="number" step="0.1" /></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Weight (kg)">الوزن (كغ)</label><input class="form-control" name="weight_kg" type="number" step="0.1" /></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Phone">الهاتف</label><input class="form-control" name="phone" type="tel" dir="ltr" /></div>
+            <div class="col-md-6"><label class="form-label" data-en="Email">البريد الإلكتروني</label><input class="form-control" name="email" type="email" dir="ltr" /></div>
+            <div class="col-md-6"><label class="form-label" data-en="Address">العنوان</label><input class="form-control" name="address" /></div>
+            <div class="col-md-6"><label class="form-label" data-en="Emergency contact name">اسم جهة اتصال الطوارئ</label><input class="form-control" name="emergency_contact_name" /></div>
+            <div class="col-md-6"><label class="form-label" data-en="Emergency contact phone">هاتف الطوارئ</label><input class="form-control" name="emergency_contact_phone" type="tel" dir="ltr" /></div>
+            <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="withLogin" checked /><label class="form-check-label" for="withLogin" data-en="Create a login for the patient (app access)">إنشاء حساب دخول للمريض (لاستخدام التطبيق)</label></div></div>
+            <div class="col-md-6 login-f"><label class="form-label" data-en="Username">اسم المستخدم</label><input class="form-control" name="username" dir="ltr" autocomplete="off" /></div>
+            <div class="col-md-6 login-f"><label class="form-label" data-en="Temporary password">كلمة مرور مؤقتة</label><input class="form-control" name="password" dir="ltr" autocomplete="new-password" /></div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal" data-en="Close">إغلاق</button><button class="btn btn-primary" type="submit" data-en="Register">تسجيل</button></div>
+        </form>
+      </div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, page = 1, role = App.role(), modal = new bootstrap.Modal('#addModal');
+      if (role === 'Admin') App.$('#inactiveWrap').classList.remove('d-none');
+      App.meta().then(function (m) { App.$('#bloodSel').innerHTML = '<option value=""></option>' + m.blood_types.map(function (b) { return '<option>' + b + '</option>'; }).join(''); });
+
+      function load() {
+        var rows = App.$('#rows');
+        rows.innerHTML = '<tr><td colspan="6"><div class="text-center py-4"><div class="spinner-border text-primary"></div></div></td></tr>';
+        App.get('/patients/', { search: App.$('#search').value.trim(), page: page, include_inactive: App.$('#inactive').checked ? 1 : '' }).then(function (d) {
+          rows.innerHTML = d.results.length ? d.results.map(function (p) {
+            return '<tr class="cursor-pointer" data-href="/staff/patient.html?id=' + p.id + '"><td><div class="d-flex align-items-center gap-2">' + App.avatar(p.name, p.is_active ? 'primary' : 'secondary', 'avatar-sm') +
+              '<div><span class="fw-medium">' + esc(p.name) + '</span>' + (p.is_active ? '' : ' <span class="badge bg-label-secondary">' + esc(t('معطّل', 'inactive')) + '</span>') + '<small class="d-block text-muted">' + esc(p.gender || '') + '</small></div></div></td>' +
+              '<td><span class="ltr small">' + esc(p.medical_id || '') + '</span></td><td>' + (p.age !== null && p.age !== undefined ? p.age : '—') + '</td>' +
+              '<td>' + (p.blood_type ? '<span class="badge bg-label-danger ltr">' + esc(p.blood_type) + '</span>' : '—') + '</td><td><span class="ltr">' + esc(p.phone || '—') + '</span></td>' +
+              '<td class="text-end"><a class="btn btn-sm btn-icon btn-text-primary" href="/staff/patient.html?id=' + p.id + '"><i class="ti ti-chevron-' + (App.lang() === 'ar' ? 'left' : 'right') + '"></i></a></td></tr>';
+          }).join('') : '<tr><td colspan="6"><div class="smi-empty"><i class="ti ti-user-search"></i><p class="mb-0">' + esc(t('لا يوجد مرضى مطابقون', 'No matching patients')) + '</p></div></td></tr>';
+          App.$$('tr[data-href]', rows).forEach(function (r) { r.onclick = function (e) { if (!e.target.closest('a')) location.href = r.dataset.href; }; });
+          App.$('#count').textContent = t(d.count + ' مريض', d.count + ' patients');
+          var pages = Math.ceil(d.count / 20);
+          App.$('#pager').innerHTML = pages > 1 ? '<button class="btn btn-sm btn-label-secondary" ' + (d.previous ? '' : 'disabled') + ' data-p="-1">' + esc(t('السابق', 'Prev')) + '</button>' +
+            '<button class="btn btn-sm btn-label-secondary" disabled>' + page + ' / ' + pages + '</button><button class="btn btn-sm btn-label-secondary" ' + (d.next ? '' : 'disabled') + ' data-p="1">' + esc(t('التالي', 'Next')) + '</button>' : '';
+          App.$$('[data-p]', App.$('#pager')).forEach(function (b) { b.onclick = function () { page += +b.dataset.p; load(); }; });
+        }).catch(function (e) { App.$('#rows').innerHTML = '<tr><td colspan="6"></td></tr>'; App.errorBox(App.$('#rows td'), e); });
+      }
+      App.$('#search').addEventListener('input', App.debounce(function () { page = 1; load(); }, 300));
+      App.$('#inactive').onchange = function () { page = 1; load(); };
+      App.$('#withLogin').onchange = function () { App.$$('.login-f').forEach(function (el) { el.classList.toggle('d-none', !App.$('#withLogin').checked); }); };
+      App.$('#addBtn').onclick = function () { App.$('#addForm').reset(); modal.show(); };
+      App.$('#addForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = this, d = App.formData(f), btn = f.querySelector('[type=submit]');
+        Object.keys(d).forEach(function (k) { if (d[k] === '') delete d[k]; });
+        if (!App.$('#withLogin').checked) { delete d.username; delete d.password; }
+        App.busy(btn, true);
+        App.post('/patients/', d).then(function (p) {
+          modal.hide();
+          App.alert(t('تم تسجيل المريض', 'Patient registered'), t('رقم الهوية الطبية: ', 'Medical ID: ') + p.medical_id).then(function () { location.href = '/staff/patient.html?id=' + p.id; });
+        }).catch(function (err) { App.formErrors(f, err); }).finally(function () { App.busy(btn, false); });
+      });
+      load();
+    })();
+  </script>
+</body>
+</html>

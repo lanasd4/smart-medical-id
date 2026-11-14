@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Admin" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>دليل الأطباء</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="دليل الأطباء في البلد" data-en-title="National doctors directory">
+    <div class="alert alert-info small"><i class="ti ti-info-circle me-1"></i>
+      <span data-en="The directory holds every doctor in the country. Doctors with a verified account accept online booking; the others are shown to patients with their contact details only.">يضم الدليل أطباء البلد. الطبيب صاحب الحساب الموثّق يستقبل حجوزات إلكترونية، والباقون تُعرض معلوماتهم للمرضى دون إمكانية الحجز.</span></div>
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="d-flex flex-wrap gap-2">
+          <input class="form-control" id="search" style="max-width:220px" placeholder="بحث" data-en-ph="Search" />
+          <select class="form-select w-auto" id="spec"></select>
+          <select class="form-select w-auto" id="state"><option value="" data-en="All">الكل</option><option value="0" data-en="Awaiting verification">بانتظار التوثيق</option><option value="bookable" data-en="Online booking">حجز إلكتروني</option></select>
+        </div>
+        <button class="btn btn-primary" id="addBtn"><i class="ti ti-plus me-1"></i><span data-en="Add to directory">إضافة طبيب للدليل</span></button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th data-en="Doctor">الطبيب</th><th data-en="Specialty">الاختصاص</th><th data-en="City">المدينة</th><th data-en="Account">الحساب</th><th data-en="Nurses">الممرضون</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex justify-content-between"><small class="text-muted" id="count"></small><div class="btn-group" id="pager"></div></div>
+    </div>
+
+    <div class="modal fade" id="docModal" tabindex="-1">
+      <div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+        <form id="docForm">
+          <div class="modal-header"><h5 class="modal-title" id="docTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body row g-3">
+            <div class="col-md-6"><label class="form-label" data-en="Full name">الاسم الكامل</label><input class="form-control" name="full_name" required /></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="Specialty">الاختصاص</label><select class="form-select" name="specialty" id="fSpec"></select></div>
+            <div class="col-md-3 col-6"><label class="form-label" data-en="City">المدينة</label><select class="form-select" name="city" id="fCity"></select></div>
+            <div class="col-md-6"><label class="form-label" data-en="Clinic">العيادة</label><input class="form-control" name="clinic_name" /></div>
+            <div class="col-md-6"><label class="form-label" data-en="Address">العنوان</label><input class="form-control" name="address" /></div>
+            <div class="col-md-4"><label class="form-label" data-en="Phone">الهاتف</label><input class="form-control" name="phone" dir="ltr" /></div>
+            <div class="col-md-4"><label class="form-label" data-en="Licence">الترخيص</label><input class="form-control" name="license_number" dir="ltr" /></div>
+            <div class="col-md-4"><label class="form-label" data-en="Years of experience">سنوات الخبرة</label><input class="form-control" name="years_experience" type="number" min="0" /></div>
+            <div class="col-12"><label class="form-label" data-en="About">نبذة</label><textarea class="form-control" name="bio" rows="2"></textarea></div>
+            <div class="col-12 acc-f"><label class="form-label" data-en="Nurses who can approve this doctor's bookings">الممرضون المخوّلون بالموافقة على حجوزات هذا الطبيب</label><div id="nurseBoxes" class="d-flex flex-wrap gap-3"></div></div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal" data-en="Close">إغلاق</button><button class="btn btn-primary" type="submit" data-en="Save">حفظ</button></div>
+        </form>
+      </div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, page = 1, modal = new bootstrap.Modal('#docModal'), editing = null, nurses = [], rowsData = [];
+      Promise.all([App.meta(), App.all('/users/', { role: 'Nurse' })]).then(function (r) {
+        var m = r[0]; nurses = r[1];
+        var specOpts = m.specialties.map(function (s) { return '<option value="' + s.code + '">' + esc(s.label) + '</option>'; }).join('');
+        App.$('#spec').innerHTML = '<option value="">' + esc(t('كل الاختصاصات', 'All specialties')) + '</option>' + specOpts;
+        App.$('#fSpec').innerHTML = specOpts;
+        App.$('#fCity').innerHTML = m.cities.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+        App.$('#nurseBoxes').innerHTML = nurses.map(function (n) {
+          return '<div class="form-check"><input class="form-check-input" type="checkbox" value="' + n.id + '" id="n' + n.id + '" /><label class="form-check-label" for="n' + n.id + '">' + esc((n.first_name + ' ' + n.last_name).trim() || n.username) + '</label></div>';
+        }).join('') || '<span class="text-muted small">' + esc(t('لا يوجد ممرضون', 'No nurses')) + '</span>';
+        load();
+      });
+
+      function load() {
+        var st = App.$('#state').value;
+        App.get('/doctors/', { all: 1, search: App.$('#search').value.trim(), specialty: App.$('#spec').value, verified: st === '0' ? 0 : '', bookable: st === 'bookable' ? 1 : '', page: page }).then(function (d) {
+          rowsData = d.results;
+          App.$('#rows').innerHTML = d.results.map(function (x) {
+            var acc = !x.user ? '<span class="badge bg-label-secondary">' + esc(t('دليل فقط', 'Directory only')) + '</span>'
+              : x.is_verified ? '<span class="badge bg-label-success"><i class="ti ti-rosette-discount-check ti-xs me-1"></i>' + esc(t('موثّق', 'Verified')) + '</span> <small class="text-muted ltr">@' + esc(x.username) + '</small>'
+              : '<span class="badge bg-label-warning">' + esc(t('بانتظار التوثيق', 'Pending')) + '</span> <small class="text-muted ltr">@' + esc(x.username) + '</small>';
+            return '<tr><td><div class="d-flex align-items-center gap-2">' + App.avatar(x.full_name, x.can_book ? 'primary' : 'secondary', 'avatar-sm') + '<div><span class="fw-medium">' + esc(x.full_name) + '</span>' +
+              '<small class="d-block text-muted">' + esc(x.clinic_name || '') + (x.license_number ? ' — <span class="ltr">' + esc(x.license_number) + '</span>' : '') + '</small></div></div></td>' +
+              '<td>' + esc(x.specialty_label) + '</td><td>' + esc(x.city) + '</td><td>' + acc + '</td><td class="small">' + esc(x.nurse_names.join('، ') || '—') + '</td>' +
+              '<td class="text-end text-nowrap">' + (x.user ? '<button class="btn btn-sm ' + (x.is_verified ? 'btn-label-secondary' : 'btn-success') + '" data-verify="' + x.id + '" data-v="' + (!x.is_verified) + '">' +
+                esc(x.is_verified ? t('إلغاء التوثيق', 'Unverify') : t('توثيق', 'Verify')) + '</button> ' : '') +
+              '<button class="btn btn-sm btn-icon btn-text-primary" data-edit="' + x.id + '"><i class="ti ti-edit"></i></button>' +
+              (!x.user ? '<button class="btn btn-sm btn-icon btn-text-danger" data-del="' + x.id + '"><i class="ti ti-trash"></i></button>' : '') + '</td></tr>';
+          }).join('') || '<tr><td colspan="6" class="text-center text-muted py-4">' + esc(t('لا نتائج', 'No results')) + '</td></tr>';
+          App.$('#count').textContent = t(d.count + ' طبيب', d.count + ' doctors');
+          App.$('#pager').innerHTML = (d.previous ? '<button class="btn btn-sm btn-label-secondary" data-p="-1">' + esc(t('السابق', 'Prev')) + '</button>' : '') + (d.next ? '<button class="btn btn-sm btn-label-secondary" data-p="1">' + esc(t('التالي', 'Next')) + '</button>' : '');
+          App.$$('[data-p]').forEach(function (b) { b.onclick = function () { page += +b.dataset.p; load(); }; });
+          App.$$('[data-verify]').forEach(function (b) {
+            b.onclick = function () {
+              var v = b.dataset.v === 'true';
+              (v ? Promise.resolve(true) : App.confirm(t('إلغاء توثيق الطبيب؟', 'Unverify?'), t('سيفقد صلاحيات الطبيب ولن يستقبل حجوزات.', 'They lose doctor permissions and bookings.'), { danger: true }))
+                .then(function (ok) { if (ok) App.post('/doctors/' + b.dataset.verify + '/verify/', { verified: v }).then(function () { App.toast(t('تم', 'Done')); load(); }); });
+            };
+          });
+          App.$$('[data-edit]').forEach(function (b) { b.onclick = function () { open(rowsData.find(function (x) { return String(x.id) === b.dataset.edit; })); }; });
+          App.$$('[data-del]').forEach(function (b) {
+            b.onclick = function () { App.confirm(t('حذف من الدليل؟', 'Remove from directory?'), '', { danger: true }).then(function (ok) { if (ok) App.del('/doctors/' + b.dataset.del + '/').then(load); }); };
+          });
+        });
+      }
+      function open(doc) {
+        editing = doc || null;
+        var f = App.$('#docForm'); f.reset();
+        App.$('#docTitle').textContent = doc ? t('تعديل بيانات الطبيب', 'Edit doctor') : t('إضافة طبيب للدليل (دون حساب)', 'Add directory doctor (no account)');
+        App.$$('#nurseBoxes input').forEach(function (c) { c.checked = !!(doc && doc.nurses.indexOf(+c.value) >= 0); });
+        App.$$('.acc-f').forEach(function (el) { el.classList.toggle('d-none', !(doc && doc.user)); });
+        if (doc) App.fillForm(f, doc);
+        modal.show();
+      }
+      App.$('#addBtn').onclick = function () { open(null); };
+      App.$('#docForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = this, d = App.formData(f), btn = f.querySelector('[type=submit]');
+        d.years_experience = d.years_experience === '' ? null : +d.years_experience;
+        if (editing && editing.user) d.nurses = App.$$('#nurseBoxes input:checked').map(function (c) { return +c.value; });
+        App.busy(btn, true);
+        (editing ? App.patch('/doctors/' + editing.id + '/', d) : App.post('/doctors/', d)).then(function () { modal.hide(); App.toast(t('تم الحفظ', 'Saved')); load(); })
+          .catch(function (err) { App.formErrors(f, err); }).finally(function () { App.busy(btn, false); });
+      });
+      App.$('#search').addEventListener('input', App.debounce(function () { page = 1; load(); }));
+      App.$('#spec').onchange = App.$('#state').onchange = function () { page = 1; load(); };
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Doctor,Nurse,Admin" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>ملف المريض</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="ملف المريض" data-en-title="Patient record">
+    <div class="row g-4">
+      <div class="col-xl-8"><div id="record"></div></div>
+      <div class="col-xl-4">
+        <div class="card mb-4" style="position:sticky;top:90px">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0 smi-section-title"><i class="ti ti-sparkles"></i><span data-en="Clinical assistant">المساعد السريري الذكي</span></h5>
+            <span class="badge bg-label-secondary" id="engine"></span>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-1 mb-2" id="quick"></div>
+            <textarea class="form-control mb-2" id="question" rows="3" placeholder="اسأل عن هذا المريض…" data-en-ph="Ask about this patient…"></textarea>
+            <button class="btn btn-primary w-100" id="askBtn"><i class="ti ti-send me-1"></i><span data-en="Ask">اسأل</span></button>
+            <div class="mt-3 small" id="answer" style="white-space:pre-wrap;line-height:1.8"></div>
+          </div>
+        </div>
+        <div class="card" id="triageCard">
+          <div class="card-header"><h6 class="mb-0 smi-section-title"><i class="ti ti-message-chatbot"></i><span data-en="Health guide assessments">تقييمات الدليل الصحي</span></h6></div>
+          <div class="card-body pt-0" id="triage"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- generic add modal -->
+    <div class="modal fade" id="addModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form id="addForm" novalidate>
+          <div class="modal-header"><h5 class="modal-title" id="addTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body row g-3" id="addFields"></div>
+          <div class="modal-footer"><button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal" data-en="Close">إغلاق</button><button class="btn btn-primary" type="submit" data-en="Save">حفظ</button></div>
+        </form>
+      </div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script src="/app/js/record.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, role = App.role(), pid = App.qs('id'), record = null, modal = new bootstrap.Modal('#addModal'), currentKind = null;
+      if (!pid) { location.replace('/staff/patients.html'); return; }
+      var obsDict = null, meta = null;
+      App.meta().then(function (m) { meta = m; });
+
+      // original delete permissions (unchanged)
+      var DELETE_ROLES = { medications: ['Admin', 'Doctor'], allergies: ['Admin'], encounters: ['Admin'] };
+      function canDelete(kind) { return (DELETE_ROLES[kind] || ['Admin', 'Doctor', 'Nurse']).indexOf(role) >= 0; }
+
+      var opt = function (pairs) { return pairs.map(function (p) { return { v: p[0], l: t(p[1], p[2] || p[1]) }; }); };
+      var FORMS = {
+        conditions: { title: ['إضافة مرض', 'Add condition'], fields: [
+          { n: 'name', l: ['اسم المرض / التشخيص', 'Condition / diagnosis'], req: 1, col: 12 },
+          { n: 'is_chronic', l: ['مرض مزمن', 'Chronic'], type: 'switch' },
+          { n: 'status', l: ['الحالة', 'Status'], type: 'select', opts: opt([['Active', 'نشط', 'Active'], ['Controlled', 'مضبوط', 'Controlled'], ['Resolved', 'شُفي', 'Resolved']]) },
+          { n: 'onset_date', l: ['تاريخ البدء', 'Onset'], type: 'date' },
+          { n: 'notes', l: ['ملاحظات', 'Notes'], type: 'textarea', col: 12 }] },
+        allergies: { title: ['إضافة تحسس', 'Add allergy'], fields: [
+          { n: 'substance', l: ['المادة المسببة', 'Substance'], req: 1, col: 12 },
+          { n: 'reaction', l: ['رد الفعل', 'Reaction'] },
+          { n: 'severity', l: ['الشدة', 'Severity'], type: 'select', opts: opt([['خفيف', 'خفيف', 'Mild'], ['متوسط', 'متوسط', 'Moderate'], ['شديد', 'شديد', 'Severe']]) }] },
+        medications: { title: ['إضافة دواء', 'Add medication'], fields: [
+          { n: 'local_name', l: ['اسم الدواء', 'Medication'], req: 1, col: 12 },
+          { n: 'dose', l: ['الجرعة', 'Dose'] }, { n: 'frequency', l: ['التكرار', 'Frequency'] },
+          { n: 'start_date', l: ['من تاريخ', 'Start'], type: 'date' }, { n: 'end_date', l: ['إلى تاريخ', 'End'], type: 'date' },
+          { n: 'status', l: ['الحالة', 'Status'], type: 'select', opts: opt([['ACTIVE', 'مستمر', 'Active'], ['STOPPED', 'متوقف', 'Stopped'], ['COMPLETED', 'منتهي', 'Completed']]) }] },
+        procedures: { title: ['إضافة عملية سابقة', 'Add surgery'], fields: [
+          { n: 'name', l: ['اسم العملية', 'Procedure'], req: 1, col: 12 },
+          { n: 'performed_on', l: ['التاريخ', 'Date'], type: 'date' }, { n: 'hospital', l: ['المشفى', 'Hospital'] },
+          { n: 'surgeon', l: ['الجرّاح', 'Surgeon'], col: 12 }, { n: 'notes', l: ['ملاحظات', 'Notes'], type: 'textarea', col: 12 }] },
+        documents: { title: ['رفع تقرير أو صورة أشعة', 'Upload report / imaging'], multipart: 1, fields: [
+          { n: 'title', l: ['العنوان', 'Title'], req: 1, col: 12 },
+          { n: 'doc_type', l: ['النوع', 'Type'], type: 'select', opts: opt([['LAB', 'تحليل مخبري', 'Lab'], ['RADIOLOGY', 'صورة أشعة', 'Imaging'], ['REPORT', 'تقرير طبي', 'Report'], ['PRESCRIPTION', 'وصفة', 'Prescription'], ['OTHER', 'أخرى', 'Other']]) },
+          { n: 'file', l: ['الملف (PDF، صورة، DICOM — حتى 15MB)', 'File (PDF, image, DICOM — max 15MB)'], type: 'file', req: 1, col: 12 },
+          { n: 'notes', l: ['ملاحظات', 'Notes'], type: 'textarea', col: 12 }] },
+        observations: { title: ['إضافة قياس / نتيجة', 'Add vital / result'], fields: [
+          { n: 'code', l: ['القياس', 'Measure'], type: 'select', dict: 1, req: 1, col: 12 },
+          { n: 'value', l: ['القيمة', 'Value'], req: 1 }, { n: 'unit', l: ['الوحدة', 'Unit'] },
+          { n: 'observed_at', l: ['الوقت', 'Time'], type: 'datetime-local', col: 12 }] },
+        encounters: { title: ['تسجيل زيارة', 'Record a visit'], fields: [
+          { n: 'type', l: ['نوع الزيارة', 'Type'], type: 'select', opts: opt([['OUTPATIENT', 'عيادة خارجية', 'Outpatient'], ['INPATIENT', 'قبول في المشفى', 'Inpatient'], ['ER', 'إسعاف', 'Emergency']]) },
+          { n: 'start_at', l: ['التاريخ', 'Date'], type: 'datetime-local' }, { n: 'reason', l: ['السبب / الملخص', 'Reason / summary'], type: 'textarea', col: 12 }] },
+        patient: { title: ['تعديل بيانات المريض', 'Edit patient'], fields: [
+          { n: 'name', l: ['الاسم', 'Name'], req: 1, col: 12 }, { n: 'date_of_birth', l: ['تاريخ الميلاد', 'Date of birth'], type: 'date' },
+          { n: 'gender', l: ['الجنس', 'Gender'], type: 'select', opts: [{ v: '', l: '' }, { v: 'ذكر', l: t('ذكر', 'Male') }, { v: 'أنثى', l: t('أنثى', 'Female') }] },
+          { n: 'blood_type', l: ['زمرة الدم', 'Blood type'], type: 'select', blood: 1 }, { n: 'height_cm', l: ['الطول (سم)', 'Height (cm)'], type: 'number' },
+          { n: 'weight_kg', l: ['الوزن (كغ)', 'Weight (kg)'], type: 'number' }, { n: 'phone', l: ['الهاتف', 'Phone'] },
+          { n: 'email', l: ['البريد', 'Email'], type: 'email' }, { n: 'address', l: ['العنوان', 'Address'] },
+          { n: 'emergency_contact_name', l: ['جهة اتصال الطوارئ', 'Emergency contact'] }, { n: 'emergency_contact_phone', l: ['هاتف الطوارئ', 'Emergency phone'] }] }
+      };
+
+      function fieldHtml(f) {
+        var lbl = '<label class="form-label">' + esc(t(f.l[0], f.l[1])) + (f.req ? ' <span class="text-danger">*</span>' : '') + '</label>', inp;
+        if (f.type === 'switch') return '<div class="col-' + (f.col || 6) + ' d-flex align-items-end"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="' + f.n + '" id="f_' + f.n + '" /><label class="form-check-label" for="f_' + f.n + '">' + esc(t(f.l[0], f.l[1])) + '</label></div></div>';
+        if (f.type === 'select') {
+          var opts = f.dict ? (obsDict || []).map(function (d) { return { v: d.id, l: d.name + ' (' + d.code + ')' }; })
+            : f.blood ? [{ v: '', l: '' }].concat((meta ? meta.blood_types : []).map(function (b) { return { v: b, l: b }; })) : f.opts;
+          inp = '<select class="form-select" name="' + f.n + '">' + opts.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>'; }).join('') + '</select>';
+        } else if (f.type === 'textarea') inp = '<textarea class="form-control" rows="2" name="' + f.n + '"></textarea>';
+        else if (f.type === 'file') inp = '<input class="form-control" type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.dcm,.txt,.doc,.docx" />';
+        else inp = '<input class="form-control" type="' + (f.type || 'text') + '" name="' + f.n + '"' + (f.type === 'number' ? ' step="0.1"' : '') + ' />';
+        return '<div class="col-' + (f.col === 12 ? '12' : 'sm-6') + '">' + lbl + inp + '</div>';
+      }
+
+      function openForm(kind) {
+        var go = function () {
+          currentKind = kind;
+          var def = FORMS[kind];
+          App.$('#addTitle').textContent = t(def.title[0], def.title[1]);
+          App.$('#addFields').innerHTML = def.fields.map(fieldHtml).join('');
+          if (kind === 'patient') App.fillForm(App.$('#addForm'), record.patient);
+          modal.show();
+        };
+        if (kind === 'observations' && !obsDict) App.all('/dictionaries/observations/').then(function (d) { obsDict = d; go(); }); else go();
+      }
+
+      App.$('#addForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = this, def = FORMS[currentKind], btn = f.querySelector('[type=submit]'), body, req;
+        if (def.multipart) {
+          body = new FormData(f); body.append('patient', pid);
+          if (!f.elements.file.files.length) { App.formErrors(f, { data: { file: [t('اختر ملفاً', 'Choose a file')] } }); return; }
+        } else {
+          body = App.formData(f);
+          // empty dates / numbers -> null; empty text stays "" (text columns are not nullable)
+          def.fields.forEach(function (fd) {
+            if (body[fd.n] === '' && (['date', 'number', 'datetime-local'].indexOf(fd.type) >= 0 || fd.dict)) body[fd.n] = null;
+          });
+          ['observed_at', 'start_at'].forEach(function (k) { if (body[k]) body[k] = new Date(body[k]).toISOString(); });
+          if (currentKind !== 'patient') body.patient = +pid;
+        }
+        App.busy(btn, true);
+        req = currentKind === 'patient' ? App.patch('/patients/' + pid + '/', body) : App.api('/' + currentKind + '/', { method: 'POST', body: body });
+        req.then(function () { modal.hide(); App.toast(t('تم الحفظ', 'Saved')); load(); })
+          .catch(function (err) { App.formErrors(f, err); }).finally(function () { App.busy(btn, false); });
+      });
+
+      function onDelete(kind, id) {
+        App.confirm(t('حذف هذا السجل؟', 'Delete this entry?'), t('لا يمكن التراجع عن الحذف.', 'This cannot be undone.'), { danger: true }).then(function (ok) {
+          if (!ok) return;
+          App.del('/' + kind + '/' + id + '/').then(function () { App.toast(t('تم الحذف', 'Deleted')); load(); }).catch(function (e) { App.toast(e.message, 'danger'); });
+        });
+      }
+
+      function load() {
+        var box = App.$('#record');
+        if (!record) App.spinner(box);
+        App.get('/patients/' + pid + '/record/').then(function (r) {
+          record = r;
+          App.$('.smi-page-title').textContent = r.patient.name;
+          RecordView.render(box, r, {
+            editable: true, canDelete: canDelete, onAdd: openForm, onDelete: onDelete,
+            headerActions: '<div class="d-flex flex-column gap-2"><button class="btn btn-sm btn-label-primary" id="editBtn"><i class="ti ti-edit me-1"></i>' + esc(t('تعديل البيانات', 'Edit details')) + '</button>' +
+              '<a class="btn btn-sm btn-label-secondary" href="/staff/calendar.html"><i class="ti ti-calendar-plus me-1"></i>' + esc(t('موعد جديد', 'New appointment')) + '</a></div>'
+          });
+          App.$('#editBtn').onclick = function () { openForm('patient'); };
+          var tb = App.$('#triage');
+          tb.innerHTML = r.triage.length ? r.triage.map(function (s) {
+            var x = s.result, ds = x.doctor_summary || {};
+            return '<div class="border-bottom py-2"><div class="d-flex justify-content-between"><strong class="small">' + esc(x.specialty_label) + '</strong>' + App.urgencyBadge(x.urgency) + '</div>' +
+              '<small class="d-block">' + esc(ds.chief_complaint || '') + '</small>' +
+              (x.recommended_tests && x.recommended_tests.length ? '<small class="d-block text-muted">' + esc(t('تحاليل مقترحة: ', 'Tests: ') + x.recommended_tests.join('، ')) + '</small>' : '') +
+              '<small class="text-muted">' + esc(App.fmtDateTime(s.created_at)) + '</small></div>';
+          }).join('') : '<p class="text-muted small mb-0">' + esc(t('لا توجد تقييمات', 'None')) + '</p>';
+        }).catch(function (e) { App.errorBox(box, e); });
+      }
+
+      // ---- clinical AI assistant
+      App.get('/ai/status/').then(function (s) { App.$('#engine').textContent = s.llm_available ? t('ذكاء اصطناعي محلي', 'Local AI') : t('ملخص آلي', 'Rule-based'); });
+      var QUICK = [['لخّص حالة المريض', 'Summarise the patient'], ['ما التحاليل المقترحة؟', 'Suggested tests?'], ['هل توجد تداخلات دوائية أو تحسسات مهمة؟', 'Drug interactions / allergies?'], ['ما التشخيصات التفريقية المحتملة؟', 'Differential diagnoses?']];
+      App.$('#quick').innerHTML = QUICK.map(function (q) { return '<button class="btn btn-xs btn-sm btn-outline-primary py-1" data-q="' + esc(t(q[0], q[1])) + '">' + esc(t(q[0], q[1])) + '</button>'; }).join('');
+      App.$$('[data-q]').forEach(function (b) { b.onclick = function () { App.$('#question').value = b.dataset.q; ask(); }; });
+      function ask() {
+        var q = App.$('#question').value.trim(), btn = App.$('#askBtn'), out = App.$('#answer');
+        App.busy(btn, true); out.innerHTML = '<span class="smi-typing"><span></span><span></span><span></span></span>';
+        App.post('/ai/doctor-assist/', { patient: +pid, question: q }).then(function (r) { out.textContent = r.answer; })
+          .catch(function (e) { out.innerHTML = '<span class="text-danger">' + esc(e.message) + '</span>'; }).finally(function () { App.busy(btn, false); });
+      }
+      App.$('#askBtn').onclick = ask;
+      load();
+    })();
+  </script>
+</body>
+</html>

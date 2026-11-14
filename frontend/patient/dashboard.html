@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Patient">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>الهوية الطبية</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="هويتي الطبية" data-en-title="My medical ID">
+    <div class="row g-4">
+      <!-- ID card -->
+      <div class="col-xl-7">
+        <div class="card smi-id-card h-100">
+          <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div class="d-flex align-items-center gap-2">
+                <img src="/assets/img/logo.png" width="34" height="34" alt="" style="background:#fff;border-radius:8px;padding:2px" />
+                <div><div class="fw-semibold" data-en="Smart Medical ID">الهوية الطبية الذكية</div><div class="label" data-en="Digital health identity">بطاقة صحية رقمية</div></div>
+              </div>
+              <div class="smi-blood" id="blood" title="زمرة الدم">—</div>
+            </div>
+            <h4 class="mb-1" id="pName">…</h4>
+            <div class="mb-4"><span class="label" data-en="ID number">رقم الهوية</span><br /><span class="smi-id-number" id="pMid">—</span></div>
+            <div class="row g-3">
+              <div class="col-4"><div class="label" data-en="Age">العمر</div><div class="value" id="pAge">—</div></div>
+              <div class="col-4"><div class="label" data-en="Gender">الجنس</div><div class="value" id="pGender">—</div></div>
+              <div class="col-4"><div class="label" data-en="Height / Weight">الطول / الوزن</div><div class="value" id="pHW">—</div></div>
+            </div>
+            <div class="mt-4" id="alertsChips"></div>
+          </div>
+        </div>
+      </div>
+      <!-- next appointment + actions -->
+      <div class="col-xl-5">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0" data-en="Next appointment">موعدك القادم</h5>
+            <a href="/patient/appointments.html" class="small" data-en="All">الكل</a>
+          </div>
+          <div class="card-body" id="nextAppt"></div>
+          <div class="card-footer border-top pt-3">
+            <div class="row g-2">
+              <div class="col-6"><a href="/patient/doctors.html" class="btn btn-primary w-100"><i class="ti ti-calendar-plus me-1"></i><span data-en="Book">احجز موعداً</span></a></div>
+              <div class="col-6"><a href="/patient/assistant.html" class="btn btn-label-primary w-100"><i class="ti ti-message-chatbot me-1"></i><span data-en="Health guide">الدليل الصحي</span></a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- stats -->
+      <div class="col-12">
+        <div class="row g-4" id="stats"></div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h5 class="card-title mb-0 smi-section-title"><i class="ti ti-pill"></i><span data-en="Current medications">الأدوية الحالية</span></h5></div>
+          <div class="card-body" id="meds"></div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h5 class="card-title mb-0 smi-section-title"><i class="ti ti-phone-call"></i><span data-en="Emergency contact">جهة الاتصال للطوارئ</span></h5></div>
+          <div class="card-body" id="emergency"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc;
+      App.get('/dashboard/').then(function (d) {
+        var p = d.patient;
+        if (!p) { App.empty(App.$('#nextAppt'), t('لا يوجد سجل مريض مرتبط بحسابك. راجع العيادة.', 'No patient record is linked to your account.')); return; }
+        App.$('#pName').textContent = p.name;
+        App.$('#pMid').textContent = p.medical_id || '—';
+        App.$('#blood').textContent = p.blood_type || '?';
+        App.$('#pAge').textContent = p.age !== null && p.age !== undefined ? p.age + ' ' + t('سنة', 'y') : '—';
+        App.$('#pGender').textContent = p.gender || '—';
+        App.$('#pHW').innerHTML = '<span class="ltr">' + (p.height_cm ? Math.round(p.height_cm) + ' cm' : '—') + ' / ' + (p.weight_kg ? Math.round(p.weight_kg) + ' kg' : '—') + '</span>';
+
+        var chips = '';
+        d.allergies.forEach(function (a) { chips += '<span class="smi-chip danger"><i class="ti ti-alert-triangle ti-xs"></i>' + esc(t('تحسس: ', 'Allergy: ') + a.substance) + '</span>'; });
+        d.chronic_conditions.forEach(function (c) { chips += '<span class="smi-chip"><i class="ti ti-heartbeat ti-xs"></i>' + esc(c) + '</span>'; });
+        App.$('#alertsChips').innerHTML = chips || '<span class="smi-chip"><i class="ti ti-shield-check ti-xs"></i>' + esc(t('لا توجد تحسسات أو أمراض مزمنة مسجّلة', 'No allergies or chronic conditions recorded')) + '</span>';
+
+        // next appointment
+        var a = d.upcoming_appointments[0], box = App.$('#nextAppt');
+        if (!a) App.empty(box, t('لا توجد مواعيد قادمة', 'No upcoming appointments'), 'ti-calendar-off');
+        else box.innerHTML =
+          '<div class="d-flex align-items-center gap-3 mb-3">' + App.avatar(a.practitioner_full_name, 'info', 'avatar-lg') +
+          '<div><h6 class="mb-0">' + esc(t('د. ', 'Dr. ') + (a.practitioner_full_name || '')) + '</h6><small class="text-muted">' + esc(a.doctor_specialty || '') + '</small></div></div>' +
+          '<div class="d-flex align-items-center gap-2 mb-2"><i class="ti ti-calendar text-primary"></i><span>' + esc(App.fmtDay(a.start_at)) + '</span></div>' +
+          '<div class="d-flex align-items-center gap-2 mb-3"><i class="ti ti-clock text-primary"></i><span class="ltr">' + esc(App.fmtTime(a.start_at)) + '</span></div>' +
+          App.statusBadge(a.status) + (a.location ? '<div class="small text-muted mt-2"><i class="ti ti-map-pin ti-xs me-1"></i>' + esc(a.location) + '</div>' : '');
+
+        var c = d.counts;
+        var stats = [
+          ['ti-heartbeat', 'danger', c.conditions, t('الأمراض المسجّلة', 'Conditions'), t(c.chronic + ' مزمن', c.chronic + ' chronic')],
+          ['ti-pill', 'primary', c.medications_active, t('أدوية حالية', 'Active medications'), ''],
+          ['ti-vaccine-bottle-off', 'warning', c.allergies, t('التحسسات', 'Allergies'), ''],
+          ['ti-files', 'info', c.documents, t('التقارير والصور', 'Reports & images'), t(c.procedures + ' عمليات سابقة', c.procedures + ' surgeries')]
+        ];
+        App.$('#stats').innerHTML = stats.map(function (s) {
+          return '<div class="col-6 col-lg-3"><a href="/patient/record.html" class="card smi-stat h-100 text-body"><div class="card-body d-flex align-items-center gap-3">' +
+            '<div class="avatar"><span class="avatar-initial rounded bg-label-' + s[1] + '"><i class="ti ' + s[0] + ' ti-md"></i></span></div>' +
+            '<div><h4 class="mb-0">' + s[2] + '</h4><small>' + esc(s[3]) + '</small>' + (s[4] ? '<div class="small text-muted">' + esc(s[4]) + '</div>' : '') + '</div></div></a></div>';
+        }).join('');
+
+        App.$('#meds').innerHTML = d.active_medications.length
+          ? '<ul class="list-unstyled mb-0">' + d.active_medications.map(function (m) { return '<li class="d-flex align-items-center gap-2 mb-2"><i class="ti ti-point-filled text-primary"></i>' + esc(m) + '</li>'; }).join('') + '</ul>'
+          : '<p class="text-muted mb-0">' + esc(t('لا توجد أدوية حالية مسجّلة', 'No active medications')) + '</p>';
+
+        App.$('#emergency').innerHTML = p.emergency_contact_name || p.emergency_contact_phone
+          ? '<h6 class="mb-1">' + esc(p.emergency_contact_name) + '</h6><a class="ltr" href="tel:' + esc(p.emergency_contact_phone) + '">' + esc(p.emergency_contact_phone) + '</a>'
+          : '<p class="text-muted mb-2">' + esc(t('لم تُسجَّل جهة اتصال للطوارئ بعد. اطلبها من العيادة عند زيارتك القادمة.', 'No emergency contact recorded yet. Ask the clinic to add one.')) + '</p>';
+      }).catch(function (e) { App.errorBox(App.$('#nextAppt'), e); });
+    })();
+  </script>
+</body>
+</html>

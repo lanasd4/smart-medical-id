@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Patient">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>سجلي الطبي</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="سجلي الطبي" data-en-title="My medical record">
+    <div class="alert alert-primary d-flex gap-2 align-items-start">
+      <i class="ti ti-info-circle mt-1"></i>
+      <div data-en="Your record is maintained by your doctors and the clinic. You can update your contact details from the account page; for any other correction please contact the clinic.">
+        سجلك الطبي يحدّثه أطباؤك والعيادة. يمكنك تعديل بيانات التواصل من صفحة الحساب، ولأي تصحيح آخر تواصل مع العيادة.
+      </div>
+    </div>
+    <div class="d-flex gap-2 mb-4 no-print">
+      <button class="btn btn-label-secondary btn-sm" onclick="window.print()"><i class="ti ti-printer me-1"></i><span data-en="Print">طباعة</span></button>
+      <a class="btn btn-label-primary btn-sm" href="/profile.html"><i class="ti ti-edit me-1"></i><span data-en="Edit contact details">تعديل بيانات التواصل</span></a>
+    </div>
+    <div id="record"></div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script src="/app/js/record.js"></script>
+  <script>
+    var box = App.$('#record');
+    App.spinner(box);
+    App.get('/me/').then(function (r) { RecordView.render(box, r, { editable: false }); })
+      .catch(function (e) { App.errorBox(box, e); });
+  </script>
+</body>
+</html>

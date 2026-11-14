@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>تسجيل الدخول — الهوية الطبية الذكية</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <div class="smi-auth">
+    <div class="card shadow-lg">
+      <div class="card-body p-4 p-sm-5">
+        <div class="text-center mb-4">
+          <img src="/app/icons/icon-192.png" class="smi-auth-logo mb-3" alt="" />
+          <h4 class="mb-1" data-en="Smart Medical ID">الهوية الطبية الذكية</h4>
+          <p class="text-muted mb-0" data-en="Your medical record, appointments and health guide in one place">سجلك الطبي ومواعيدك ودليلك الصحي في مكان واحد</p>
+        </div>
+        <form id="loginForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label" for="username" data-en="Username">اسم المستخدم</label>
+            <input type="text" class="form-control" id="username" name="username" autocomplete="username" autocapitalize="none" required autofocus />
+          </div>
+          <div class="mb-3 form-password-toggle">
+            <label class="form-label" for="password" data-en="Password">كلمة المرور</label>
+            <div class="input-group input-group-merge">
+              <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required />
+              <span class="input-group-text cursor-pointer"><i class="ti ti-eye-off"></i></span>
+            </div>
+          </div>
+          <div class="alert alert-danger d-none py-2" id="loginError"></div>
+          <button class="btn btn-primary d-grid w-100 mb-3" type="submit" id="loginBtn" data-en="Sign in">تسجيل الدخول</button>
+        </form>
+        <div class="text-center small text-muted">
+          <span data-en="Patient accounts are created by the clinic.">حسابات المرضى تُنشأ من قبل العيادة.</span><br />
+          <span data-en="Are you a doctor?">هل أنت طبيب؟</span>
+          <a href="/register.html" data-en="Join the platform">انضم إلى المنصة</a>
+        </div>
+        <div class="d-flex justify-content-center gap-2 mt-4">
+          <button class="btn btn-sm btn-text-secondary" id="langBtn" type="button">EN</button>
+          <button class="btn btn-sm btn-text-secondary d-none" id="installBtn" type="button"><i class="ti ti-device-mobile-down me-1"></i><span data-en="Install app">تثبيت التطبيق</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/app/js/core.js"></script>
+  <script>
+    App.applyI18n();
+    window.Helpers.initPasswordToggle();
+    var langBtn = App.$('#langBtn');
+    langBtn.textContent = App.lang() === 'ar' ? 'English' : 'العربية';
+    langBtn.onclick = function () { App.setLang(App.lang() === 'ar' ? 'en' : 'ar'); };
+    document.addEventListener('smi:installable', function () { App.$('#installBtn').classList.remove('d-none'); });
+    App.$('#installBtn').onclick = function () { if (App.installPrompt) App.installPrompt.prompt(); };
+
+    var existing = App.user();
+    if (existing && localStorage.getItem('smi_refresh')) location.replace(App.homeFor(existing.role));
+
+    App.$('#loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = App.$('#loginBtn'), box = App.$('#loginError');
+      box.classList.add('d-none');
+      var data = App.formData(this);
+      if (!data.username || !data.password) { box.textContent = App.t('أدخل اسم المستخدم وكلمة المرور', 'Enter username and password'); box.classList.remove('d-none'); return; }
+      App.busy(btn, true);
+      App.api('/token/', { method: 'POST', body: data, auth: false }).then(function (res) {
+        App.setSession(res);
+        var next = App.qs('next');
+        location.replace(next && next.charAt(0) === '/' && next.indexOf('//') !== 0 ? next : App.homeFor(res.user.role));
+      }).catch(function (err) {
+        box.textContent = err.status === 401 ? App.t('اسم المستخدم أو كلمة المرور غير صحيحة', 'Wrong username or password') : err.message;
+        box.classList.remove('d-none');
+        App.busy(btn, false);
+      });
+    });
+  </script>
+</body>
+</html>

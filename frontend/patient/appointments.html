@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Patient" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>مواعيدي</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="مواعيدي" data-en-title="My appointments">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+      <ul class="nav nav-pills" id="tabs">
+        <li class="nav-item"><button class="nav-link active" data-when="upcoming"><i class="ti ti-calendar-event me-1"></i><span data-en="Upcoming">القادمة</span></button></li>
+        <li class="nav-item"><button class="nav-link" data-when="past"><i class="ti ti-history me-1"></i><span data-en="Past">السابقة</span></button></li>
+      </ul>
+      <a href="/patient/doctors.html" class="btn btn-primary"><i class="ti ti-calendar-plus me-1"></i><span data-en="New booking">حجز جديد</span></a>
+    </div>
+    <div class="row g-4" id="list"></div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, when = 'upcoming', list = App.$('#list');
+      function render(items) {
+        if (!items.length) { App.empty(list, when === 'upcoming' ? t('لا توجد مواعيد قادمة', 'No upcoming appointments') : t('لا توجد مواعيد سابقة', 'No past appointments'), 'ti-calendar-off'); return; }
+        list.innerHTML = items.map(function (a) {
+          var canCancel = (a.status === 'PENDING' || a.status === 'CONFIRMED') && new Date(a.start_at) > new Date();
+          var border = { PENDING: 'warning', CONFIRMED: 'success', REJECTED: 'danger' }[a.status] || 'secondary';
+          return '<div class="col-md-6 col-xl-4"><div class="card h-100 border-start border-3 border-' + border + '"><div class="card-body">' +
+            '<div class="d-flex justify-content-between align-items-start mb-3">' + App.statusBadge(a.status) + '<small class="text-muted">#' + a.id + '</small></div>' +
+            '<div class="d-flex gap-3 align-items-center mb-3">' + App.avatar(a.practitioner_full_name, 'info') +
+            '<div><h6 class="mb-0">' + esc(t('د. ', 'Dr. ') + (a.practitioner_full_name || '')) + '</h6><small class="text-muted">' + esc(a.doctor_specialty || '') + '</small></div></div>' +
+            '<p class="mb-1"><i class="ti ti-calendar ti-xs me-1 text-primary"></i>' + esc(App.fmtDay(a.start_at)) + '</p>' +
+            '<p class="mb-2"><i class="ti ti-clock ti-xs me-1 text-primary"></i><span class="ltr">' + esc(App.fmtTime(a.start_at) + ' - ' + App.fmtTime(a.end_at)) + '</span></p>' +
+            (a.location ? '<p class="small text-muted mb-2"><i class="ti ti-map-pin ti-xs me-1"></i>' + esc(a.location) + '</p>' : '') +
+            (a.reason ? '<p class="small mb-2"><strong>' + esc(t('السبب: ', 'Reason: ')) + '</strong>' + esc(a.reason) + '</p>' : '') +
+            (a.status === 'PENDING' ? '<p class="small text-warning mb-2"><i class="ti ti-hourglass ti-xs me-1"></i>' + esc(t('الوقت محجوز باسمك بانتظار موافقة العيادة', 'Slot held, waiting for the clinic')) + '</p>' : '') +
+            (a.decision_note ? '<div class="alert alert-secondary small py-2 mb-2">' + esc(a.decision_note) + '</div>' : '') +
+            (a.decided_by_name && a.status !== 'PENDING' ? '<small class="text-muted d-block mb-2">' + esc(t('بواسطة ', 'by ') + a.decided_by_name) + '</small>' : '') +
+            (canCancel ? '<button class="btn btn-sm btn-label-danger w-100" data-cancel="' + a.id + '"><i class="ti ti-x me-1"></i>' + esc(t('إلغاء الموعد', 'Cancel')) + '</button>' : '') +
+            (a.status === 'REJECTED' || a.status === 'CANCELLED' ? '<a class="btn btn-sm btn-label-primary w-100" href="/patient/book.html?doctor=' + a.doctor + '">' + esc(t('حجز موعد آخر', 'Book another time')) + '</a>' : '') +
+            '</div></div></div>';
+        }).join('');
+        App.$$('[data-cancel]', list).forEach(function (b) {
+          b.onclick = function () {
+            App.confirm(t('إلغاء الموعد؟', 'Cancel appointment?'), t('سيصبح هذا الوقت متاحاً لمرضى آخرين.', 'The slot will become available to others.'), { danger: true }).then(function (ok) {
+              if (!ok) return;
+              App.busy(b, true);
+              App.post('/appointments/' + b.dataset.cancel + '/cancel/').then(function () { App.toast(t('تم إلغاء الموعد', 'Cancelled')); load(); })
+                .catch(function (e) { App.toast(e.message, 'danger'); App.busy(b, false); });
+            });
+          };
+        });
+      }
+      function load() {
+        App.spinner(list);
+        App.get('/appointments/', { when: when, page_size: 50 }).then(function (d) { render(d.results); }).catch(function (e) { App.errorBox(list, e); });
+      }
+      App.$$('#tabs .nav-link').forEach(function (b) {
+        b.onclick = function () { App.$$('#tabs .nav-link').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); when = b.dataset.when; load(); };
+      });
+      document.addEventListener('smi:notification', function (e) { if (/APPOINTMENT/.test(e.detail.kind)) load(); });
+      load();
+    })();
+  </script>
+</body>
+</html>

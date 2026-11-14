@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Patient" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>حجز موعد</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="حجز موعد" data-en-title="Book an appointment">
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <div class="card mb-4" id="doctorCard"><div class="card-body"><div class="spinner-border text-primary"></div></div></div>
+        <div class="card d-none" id="triageCard">
+          <div class="card-body">
+            <h6 class="smi-section-title"><i class="ti ti-message-chatbot"></i><span data-en="Health guide summary attached">مرفق ملخص الدليل الصحي</span></h6>
+            <div id="triageBody" class="small"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-1" data-en="1. Choose a day">١. اختر اليوم</h5>
+          </div>
+          <div class="card-body"><div class="smi-days" id="days"></div></div>
+          <div class="card-header pt-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="card-title mb-0" data-en="2. Choose a time">٢. اختر الوقت</h5>
+            <div class="smi-legend small"><span><i style="background:rgba(11,127,123,.12);border:1px solid rgba(11,127,123,.4)"></i><span data-en="Available">متاح</span></span><span><i style="border:1px dashed #c9c9d2"></i><span data-en="Booked">محجوز</span></span></div>
+          </div>
+          <div class="card-body"><div id="slots"></div></div>
+          <div class="card-header pt-0"><h5 class="card-title mb-0" data-en="3. Confirm">٣. تأكيد الحجز</h5></div>
+          <div class="card-body">
+            <label class="form-label" for="reason" data-en="Reason for visit (optional)">سبب الزيارة (اختياري)</label>
+            <textarea class="form-control mb-3" id="reason" rows="2" maxlength="255" placeholder="مثال: ألم في الركبة منذ أسبوع" data-en-ph="e.g. knee pain for a week"></textarea>
+            <div class="alert d-flex gap-2 align-items-start" id="approvalNote"></div>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+              <div id="summary" class="fw-medium text-muted" data-en="No time selected yet">لم تختر موعداً بعد</div>
+              <button class="btn btn-primary btn-lg" id="bookBtn" disabled><i class="ti ti-calendar-check me-1"></i><span data-en="Confirm booking">تأكيد الحجز</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, doctorId = App.qs('doctor'), triageId = App.qs('triage');
+      var days = [], selectedDay = null, selectedSlot = null, doctor = null;
+      if (!doctorId) { location.replace('/patient/doctors.html'); return; }
+
+      App.get('/doctors/' + doctorId + '/').then(function (d) {
+        doctor = d;
+        var wd = App.WEEKDAYS();
+        var hours = {};
+        d.availability.forEach(function (a) { (hours[a.weekday] = hours[a.weekday] || []).push(a.start_time.slice(0, 5) + '–' + a.end_time.slice(0, 5)); });
+        var order = [5, 6, 0, 1, 2, 3, 4];  // Saturday first
+        App.$('#doctorCard').innerHTML = '<div class="card-body"><div class="d-flex gap-3 align-items-center mb-3">' + App.avatar(d.full_name, 'primary', 'avatar-xl') +
+          '<div><h5 class="mb-1">' + esc(t('د. ', 'Dr. ') + d.full_name) + '</h5><span class="badge bg-label-primary">' + esc(d.specialty_label) + '</span></div></div>' +
+          '<ul class="list-unstyled small mb-3">' + (d.clinic_name ? '<li class="mb-1"><i class="ti ti-building-hospital ti-xs me-1"></i>' + esc(d.clinic_name) + '</li>' : '') +
+          '<li class="mb-1"><i class="ti ti-map-pin ti-xs me-1"></i>' + esc([d.city, d.address].filter(Boolean).join(' — ')) + '</li>' +
+          '<li class="mb-1"><i class="ti ti-clock ti-xs me-1"></i>' + esc(t('مدة الموعد ' + d.slot_minutes + ' دقيقة', d.slot_minutes + '-minute appointments')) + '</li></ul>' +
+          '<h6 class="mb-2">' + esc(t('أوقات الدوام', 'Working hours')) + '</h6><ul class="list-unstyled small mb-0">' +
+          order.filter(function (i) { return hours[i]; }).map(function (i) { return '<li class="d-flex justify-content-between border-bottom py-1"><span>' + esc(wd[i]) + '</span><span class="ltr">' + esc(hours[i].join(' / ')) + '</span></li>'; }).join('') +
+          '</ul></div>';
+        var note = App.$('#approvalNote');
+        if (d.requires_approval) {
+          note.className = 'alert alert-warning d-flex gap-2 align-items-start';
+          note.innerHTML = '<i class="ti ti-hourglass mt-1"></i><div>' + esc(t('بعد اختيارك سيُحجز الوقت باسمك فوراً، ويُثبَّت الموعد بعد موافقة الطبيب أو الممرض. سيصلك إشعار بالنتيجة.',
+            'The slot is held for you immediately and confirmed once the doctor or nurse approves. You will be notified.')) + '</div>';
+        } else {
+          note.className = 'alert alert-success d-flex gap-2 align-items-start';
+          note.innerHTML = '<i class="ti ti-bolt mt-1"></i><div>' + esc(t('هذا الطبيب يثبّت المواعيد فوراً دون انتظار موافقة.', 'This doctor confirms bookings instantly.')) + '</div>';
+        }
+        if (!d.can_book) { App.$('#slots').innerHTML = '<div class="alert alert-secondary mb-0">' + esc(t('هذا الطبيب لا يستقبل حجوزات إلكترونية.', 'This doctor does not accept online booking.')) + '</div>'; return; }
+        loadSlots();
+      }).catch(function (e) { App.errorBox(App.$('#doctorCard'), e); });
+
+      if (triageId) {
+        App.get('/ai/triage/' + triageId + '/').then(function (s) {
+          if (!s.result || !s.result.specialty) return;
+          App.$('#triageCard').classList.remove('d-none');
+          App.$('#triageBody').innerHTML = '<div class="mb-2">' + App.urgencyBadge(s.result.urgency) + ' <span class="badge bg-label-primary">' + esc(s.result.specialty_label) + '</span></div>' +
+            '<p class="text-muted mb-0">' + esc(t('سيرى الطبيب ملخص حالتك والتحاليل المقترحة مع طلب الحجز.', 'The doctor will see your symptoms summary and suggested tests with the booking.')) + '</p>';
+          if (!App.$('#reason').value) App.$('#reason').value = (s.messages[0] && s.messages[0].content || '').slice(0, 250);
+        }).catch(function () { triageId = null; });
+      }
+
+      function loadSlots(keepDay) {
+        App.spinner(App.$('#slots'));
+        return App.get('/doctors/' + doctorId + '/slots/', { from: App.isoDate(), days: Math.min(doctor.booking_window_days || 14, 21) }).then(function (r) {
+          days = r.days;
+          var dayBox = App.$('#days');
+          dayBox.innerHTML = days.map(function (d, i) {
+            var dt = new Date(d.date + 'T12:00:00');
+            var has = d.available_count > 0;
+            return '<button type="button" class="smi-day" data-i="' + i + '"' + (has ? '' : ' disabled') + '><small>' + esc(App.WEEKDAYS()[d.weekday]) + '</small><strong>' + dt.getDate() + '</strong>' +
+              '<small>' + esc(dt.toLocaleDateString(App.lang() === 'ar' ? 'ar-SY' : 'en-GB', { month: 'short' })) + '</small><span class="cnt ' + (has ? 'text-success' : 'text-muted') + '">' +
+              esc(has ? t(d.available_count + ' متاح', d.available_count + ' free') : t('لا يوجد', 'none')) + '</span></button>';
+          }).join('');
+          App.$$('.smi-day', dayBox).forEach(function (b) { b.onclick = function () { pickDay(+b.dataset.i); }; });
+          var idx = keepDay !== undefined && days[keepDay] && days[keepDay].available_count ? keepDay : days.findIndex(function (d) { return d.available_count > 0; });
+          if (idx < 0) { App.empty(App.$('#slots'), t('لا توجد مواعيد متاحة خلال الفترة القادمة', 'No free slots in the coming days'), 'ti-calendar-off'); return; }
+          pickDay(idx);
+        }).catch(function (e) { App.errorBox(App.$('#slots'), e); });
+      }
+
+      function pickDay(i) {
+        selectedDay = i; selectedSlot = null; updateSummary();
+        App.$$('.smi-day').forEach(function (b) { b.classList.toggle('active', +b.dataset.i === i); });
+        var d = days[i], box = App.$('#slots');
+        box.innerHTML = '<p class="fw-medium mb-3">' + esc(App.fmtDay(d.date + 'T12:00:00')) + '</p><div class="smi-slots">' + d.slots.map(function (s, j) {
+          return '<button type="button" class="smi-slot ' + (s.available ? '' : 'taken') + '" data-j="' + j + '"' + (s.available ? '' : ' disabled title="' + esc(t('محجوز', 'Booked')) + '"') + '>' + esc(App.fmtTime(s.start)) + '</button>';
+        }).join('') + '</div>';
+        App.$$('.smi-slot:not(.taken)', box).forEach(function (b) {
+          b.onclick = function () {
+            App.$$('.smi-slot').forEach(function (x) { x.classList.remove('active'); });
+            b.classList.add('active'); selectedSlot = d.slots[+b.dataset.j]; updateSummary();
+          };
+        });
+      }
+
+      function updateSummary() {
+        var btn = App.$('#bookBtn');
+        btn.disabled = !selectedSlot;
+        App.$('#summary').innerHTML = selectedSlot ? '<i class="ti ti-calendar-event text-primary me-1"></i>' + esc(App.fmtDay(selectedSlot.start)) + ' — <span class="ltr">' + esc(App.fmtTime(selectedSlot.start)) + '</span>'
+          : esc(t('لم تختر موعداً بعد', 'No time selected yet'));
+      }
+
+      App.$('#bookBtn').onclick = function () {
+        if (!selectedSlot) return;
+        var btn = this; App.busy(btn, true);
+        App.post('/appointments/book/', { doctor: +doctorId, start_at: selectedSlot.start, reason: App.$('#reason').value.trim(), triage: triageId ? +triageId : null })
+          .then(function (a) {
+            var pending = a.status === 'PENDING';
+            return App.alert(pending ? t('تم إرسال طلب الحجز', 'Request sent') : t('تم تثبيت موعدك', 'Appointment confirmed'),
+              pending ? t('الوقت محجوز باسمك الآن. سيصلك إشعار عند موافقة الطبيب أو الممرض.', 'The slot is held for you. You will be notified once approved.')
+                      : t('نراك في الموعد!', 'See you then!'), pending ? 'info' : 'success')
+              .then(function () { location.href = '/patient/appointments.html'; });
+          })
+          .catch(function (e) {
+            App.toast(e.message, 'danger');
+            App.busy(btn, false);
+            if (e.data && (e.data.code === 'slot_taken' || e.data.code === 'invalid_slot')) loadSlots(selectedDay);
+          });
+      };
+    })();
+  </script>
+</body>
+</html>

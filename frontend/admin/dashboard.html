@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Admin" data-css="apex-charts,sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>لوحة الإدارة</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="لوحة الإدارة" data-en-title="Admin dashboard">
+    <div class="row g-4 mb-4" id="stats"></div>
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <div class="card h-100">
+          <div class="card-header"><h5 class="card-title mb-0" data-en="Appointments per day — past and next 7 days">المواعيد يومياً — الأسبوع الماضي والقادم</h5>
+            <small class="text-muted" data-en="Excluding rejected and cancelled">دون المرفوضة والملغاة</small></div>
+          <div class="card-body"><div id="chart" style="min-height:300px"></div></div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="card h-100">
+          <div class="card-header"><h5 class="card-title mb-0" data-en="Appointments by status">المواعيد حسب الحالة</h5></div>
+          <div class="card-body" id="byStatus"></div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0" data-en="Doctors awaiting verification">أطباء بانتظار التوثيق</h5>
+            <a href="/admin/doctors.html" class="small" data-en="Directory">الدليل</a>
+          </div>
+          <div class="card-body" id="pendingDocs"></div>
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="card h-100">
+          <div class="card-header"><h5 class="card-title mb-0" data-en="Doctors by specialty">الأطباء حسب الاختصاص</h5></div>
+          <div class="card-body" id="bySpec"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/apex-charts/apexcharts.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, dark = App.isDark();
+      var ink = dark ? '#b0acc7' : '#6d6b77', grid = dark ? '#3b405b' : '#eceaf0';
+
+      function barList(el, rows) {  // rows: [{label, count, badge?}]
+        var max = Math.max.apply(null, rows.map(function (r) { return r.count; }).concat([1]));
+        el.innerHTML = rows.length ? rows.map(function (r) {
+          return '<div class="mb-3"><div class="d-flex justify-content-between small mb-1"><span>' + (r.badge || esc(r.label)) + '</span><strong>' + r.count + '</strong></div>' +
+            '<div class="progress" style="height:8px" title="' + esc(r.label + ': ' + r.count) + '"><div class="progress-bar" style="width:' + (r.count / max * 100) + '%;background:#0B7F7B;border-radius:4px"></div></div></div>';
+        }).join('') : '<p class="text-muted mb-0">' + esc(t('لا توجد بيانات', 'No data')) + '</p>';
+      }
+
+      Promise.all([App.get('/dashboard/'), App.meta()]).then(function (res) {
+        var d = res[0], m = res[1], c = d.counts;
+        var stats = [['ti-users', 'primary', c.patients, t('مرضى نشطون', 'Active patients')], ['ti-stethoscope', 'info', c.doctors_subscribed, t('أطباء مشتركون من ' + c.doctors_total, 'Subscribed of ' + c.doctors_total + ' doctors')],
+          ['ti-calendar-event', 'success', c.appointments_today, t('مواعيد اليوم', 'Appointments today')], ['ti-hourglass', 'warning', c.appointments_pending, t('حجوزات معلّقة', 'Pending bookings')],
+          ['ti-rosette-discount-check', 'danger', c.doctors_pending_verification, t('أطباء بانتظار التوثيق', 'Awaiting verification')], ['ti-message-chatbot', 'secondary', c.triage_sessions, t('استشارات الدليل الصحي', 'Health-guide sessions')]];
+        App.$('#stats').innerHTML = stats.map(function (s) {
+          return '<div class="col-6 col-md-4 col-xl-2"><div class="card smi-stat h-100"><div class="card-body"><div class="avatar mb-2"><span class="avatar-initial rounded bg-label-' + s[1] + '"><i class="ti ' + s[0] + '"></i></span></div>' +
+            '<h4 class="mb-0"><span class="ltr">' + s[2] + '</span></h4><small class="d-block">' + esc(s[3]) + '</small></div></div></div>';
+        }).join('');
+
+        // single series -> one hue, no legend; tooltip on hover
+        var days = [], counts = {};
+        d.appointments_series.forEach(function (r) { counts[r.date] = r.count; });
+        for (var i = -7; i <= 7; i++) { var dt = new Date(); dt.setDate(dt.getDate() + i); days.push(App.isoDate(dt)); }
+        var peak = Math.max.apply(null, days.map(function (x) { return counts[x] || 0; }));
+        new ApexCharts(App.$('#chart'), {
+          chart: { type: 'bar', height: 300, toolbar: { show: false }, fontFamily: 'inherit', foreColor: ink },
+          series: [{ name: t('المواعيد', 'Appointments'), data: days.map(function (x) { return counts[x] || 0; }) }],
+          xaxis: { categories: days.map(function (x) { var p = x.split('-'); return +p[2] + '/' + +p[1]; }),
+                   axisBorder: { show: false }, axisTicks: { show: false }, labels: { rotate: 0, hideOverlappingLabels: true } },
+          yaxis: { labels: { formatter: function (v) { return Math.round(v); } }, min: 0, max: Math.max(4, peak), tickAmount: Math.min(4, Math.max(4, peak)) },
+          annotations: { xaxis: [{ x: (function () { var p = days[7].split('-'); return +p[2] + '/' + +p[1]; })(),
+            borderColor: ink, strokeDashArray: 3, label: { text: t('اليوم', 'Today'), style: { background: dark ? '#2f3349' : '#fff', color: ink } } }] },
+          colors: ['#0B7F7B'], plotOptions: { bar: { columnWidth: '45%', borderRadius: 4, borderRadiusApplication: 'end' } },
+          dataLabels: { enabled: false }, grid: { borderColor: grid, strokeDashArray: 4 }, legend: { show: false },
+          tooltip: { theme: dark ? 'dark' : 'light' }
+        }).render();
+
+        barList(App.$('#byStatus'), d.appointments_by_status.map(function (r) { return { label: App.statusLabel(r.status), badge: App.statusBadge(r.status), count: r.count }; }));
+        var specs = {}; m.specialties.forEach(function (s) { specs[s.code] = s.label; });
+        barList(App.$('#bySpec'), d.doctors_by_specialty.map(function (r) { return { label: specs[r.specialty] || r.specialty, count: r.count }; }));
+      });
+
+      function loadPending() {
+        var box = App.$('#pendingDocs');
+        App.get('/doctors/', { all: 1, verified: 0, page_size: 10 }).then(function (d) {
+          if (!d.results.length) { App.empty(box, t('لا يوجد أطباء بانتظار التوثيق', 'Nobody waiting'), 'ti-rosette-discount-check'); return; }
+          box.innerHTML = d.results.map(function (x) {
+            return '<div class="d-flex align-items-center gap-3 border-bottom py-2">' + App.avatar(x.full_name, 'info') +
+              '<div class="flex-grow-1"><strong>' + esc(t('د. ', 'Dr. ') + x.full_name) + '</strong><small class="d-block text-muted">' + esc(x.specialty_label + ' — ' + x.city) +
+              ' — ' + esc(t('ترخيص: ', 'Licence: ')) + '<span class="ltr">' + esc(x.license_number || '—') + '</span></small></div>' +
+              '<button class="btn btn-sm btn-success" data-verify="' + x.id + '"><i class="ti ti-check me-1"></i>' + esc(t('توثيق', 'Verify')) + '</button></div>';
+          }).join('');
+          App.$$('[data-verify]', box).forEach(function (b) {
+            b.onclick = function () { App.busy(b, true); App.post('/doctors/' + b.dataset.verify + '/verify/', { verified: true }).then(function () { App.toast(t('تم توثيق الطبيب', 'Doctor verified')); loadPending(); }); };
+          });
+        });
+      }
+      loadPending();
+    })();
+  </script>
+</body>
+</html>

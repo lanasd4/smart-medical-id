@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Admin" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>المستخدمون</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="المستخدمون" data-en-title="Users">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div class="d-flex flex-wrap gap-2">
+          <input class="form-control" id="search" style="max-width:260px" placeholder="بحث بالاسم أو اسم المستخدم" data-en-ph="Search" />
+          <select class="form-select w-auto" id="roleFilter">
+            <option value="" data-en="All roles">كل الأدوار</option><option value="Admin" data-en="Admins">المشرفون</option><option value="Doctor" data-en="Doctors">الأطباء</option>
+            <option value="Nurse" data-en="Nurses">الممرضون</option><option value="Patient" data-en="Patients">المرضى</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="addBtn"><i class="ti ti-user-plus me-1"></i><span data-en="New user">مستخدم جديد</span></button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th data-en="User">المستخدم</th><th data-en="Role">الدور</th><th data-en="Status">الحالة</th><th data-en="Last login">آخر دخول</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex justify-content-between"><small class="text-muted" id="count"></small><div class="btn-group" id="pager"></div></div>
+    </div>
+
+    <div class="modal fade" id="userModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form id="userForm" autocomplete="off">
+          <div class="modal-header"><h5 class="modal-title" data-en="New user">مستخدم جديد</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body row g-3">
+            <div class="col-12"><label class="form-label" data-en="Role">الدور</label>
+              <select class="form-select" name="role" id="roleSel"><option value="Doctor" data-en="Doctor">طبيب</option><option value="Nurse" data-en="Nurse">ممرض/ة</option><option value="Patient" data-en="Patient">مريض</option><option value="Admin" data-en="Admin">مشرف</option></select></div>
+            <div class="col-6"><label class="form-label" data-en="First name">الاسم</label><input class="form-control" name="first_name" required /></div>
+            <div class="col-6"><label class="form-label" data-en="Last name">الكنية</label><input class="form-control" name="last_name" /></div>
+            <div class="col-6"><label class="form-label" data-en="Username">اسم المستخدم</label><input class="form-control" name="username" dir="ltr" required /></div>
+            <div class="col-6"><label class="form-label" data-en="Email">البريد</label><input class="form-control" name="email" type="email" dir="ltr" /></div>
+            <div class="col-12"><label class="form-label" data-en="Password">كلمة المرور</label><input class="form-control" name="password" dir="ltr" required autocomplete="new-password" /></div>
+            <div class="col-6 doc-f"><label class="form-label" data-en="Specialty">الاختصاص</label><select class="form-select" name="specialty" id="specSel"></select></div>
+            <div class="col-6 doc-f"><label class="form-label" data-en="City">المدينة</label><select class="form-select" name="city" id="citySel"></select></div>
+            <div class="col-12 small text-muted pat-f d-none" data-en="Medical details of the patient can be completed later from the patient record.">يمكن إكمال البيانات الطبية للمريض لاحقاً من ملفه.</div>
+          </div>
+          <div class="modal-footer"><button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal" data-en="Close">إغلاق</button><button class="btn btn-primary" type="submit" data-en="Create">إنشاء</button></div>
+        </form>
+      </div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, page = 1, me = App.user(), modal = new bootstrap.Modal('#userModal');
+      var ROLE = { Admin: ['warning', 'مشرف', 'Admin'], Doctor: ['info', 'طبيب', 'Doctor'], Nurse: ['success', 'ممرض/ة', 'Nurse'], Patient: ['primary', 'مريض', 'Patient'] };
+      App.meta().then(function (m) {
+        App.$('#specSel').innerHTML = m.specialties.map(function (s) { return '<option value="' + s.code + '">' + esc(s.label) + '</option>'; }).join('');
+        App.$('#citySel').innerHTML = m.cities.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+      });
+      App.$('#roleSel').onchange = function () {
+        App.$$('.doc-f').forEach(function (el) { el.classList.toggle('d-none', App.$('#roleSel').value !== 'Doctor'); });
+        App.$$('.pat-f').forEach(function (el) { el.classList.toggle('d-none', App.$('#roleSel').value !== 'Patient'); });
+      };
+
+      function load() {
+        var rows = App.$('#rows');
+        App.get('/users/', { search: App.$('#search').value.trim(), role: App.$('#roleFilter').value, page: page }).then(function (d) {
+          rows.innerHTML = d.results.map(function (u) {
+            var name = (u.first_name + ' ' + u.last_name).trim() || u.username;
+            var roles = u.groups_display.map(function (g) { var r = ROLE[g] || ['secondary', g, g]; return '<span class="badge bg-label-' + r[0] + ' me-1">' + esc(t(r[1], r[2])) + '</span>'; }).join('') ||
+              (u.doctor_profile_id ? '<span class="badge bg-label-danger">' + esc(t('طبيب غير موثّق', 'Unverified doctor')) + '</span>' : '<span class="text-muted small">—</span>');
+            return '<tr><td><div class="d-flex align-items-center gap-2">' + App.avatar(name, 'primary', 'avatar-sm') + '<div><span class="fw-medium">' + esc(name) + '</span><small class="d-block text-muted ltr">@' + esc(u.username) + '</small></div></div></td>' +
+              '<td>' + roles + (u.is_superuser ? '<span class="badge bg-label-dark">superuser</span>' : '') + '</td>' +
+              '<td>' + (u.is_active ? '<span class="badge bg-label-success">' + esc(t('فعّال', 'Active')) + '</span>' : '<span class="badge bg-label-secondary">' + esc(t('معطّل', 'Disabled')) + '</span>') + '</td>' +
+              '<td class="small">' + (u.last_login ? esc(App.relTime(u.last_login)) : '—') + '</td>' +
+              '<td class="text-end text-nowrap">' + (u.id === me.id ? '' :
+                '<button class="btn btn-sm btn-icon btn-text-secondary" data-pw="' + u.id + '" title="' + esc(t('تغيير كلمة المرور', 'Reset password')) + '"><i class="ti ti-key"></i></button>' +
+                '<button class="btn btn-sm btn-icon btn-text-' + (u.is_active ? 'danger' : 'success') + '" data-toggle="' + u.id + '" title="' + esc(u.is_active ? t('تعطيل', 'Disable') : t('تفعيل', 'Enable')) + '"><i class="ti ' + (u.is_active ? 'ti-user-off' : 'ti-user-check') + '"></i></button>') + '</td></tr>';
+          }).join('') || '<tr><td colspan="5" class="text-center text-muted py-4">' + esc(t('لا نتائج', 'No results')) + '</td></tr>';
+          App.$('#count').textContent = t(d.count + ' مستخدم', d.count + ' users');
+          App.$('#pager').innerHTML = (d.previous ? '<button class="btn btn-sm btn-label-secondary" data-p="-1">' + esc(t('السابق', 'Prev')) + '</button>' : '') + (d.next ? '<button class="btn btn-sm btn-label-secondary" data-p="1">' + esc(t('التالي', 'Next')) + '</button>' : '');
+          App.$$('[data-p]').forEach(function (b) { b.onclick = function () { page += +b.dataset.p; load(); }; });
+          App.$$('[data-toggle]', rows).forEach(function (b) { b.onclick = function () { App.post('/users/' + b.dataset.toggle + '/toggle-status/').then(load).catch(function (e) { App.toast(e.message, 'danger'); }); }; });
+          App.$$('[data-pw]', rows).forEach(function (b) {
+            b.onclick = function () {
+              App.confirm(t('كلمة مرور جديدة', 'New password'), t('8 أحرف على الأقل', 'At least 8 characters'), { input: 'text' }).then(function (pw) {
+                if (!pw) return;
+                App.post('/users/' + b.dataset.pw + '/change-password/', { new_password: pw }).then(function () { App.toast(t('تم تغيير كلمة المرور', 'Password changed')); }).catch(function (e) { App.toast(e.message, 'danger'); });
+              });
+            };
+          });
+        });
+      }
+      App.$('#search').addEventListener('input', App.debounce(function () { page = 1; load(); }));
+      App.$('#roleFilter').onchange = function () { page = 1; load(); };
+      App.$('#addBtn').onclick = function () { App.$('#userForm').reset(); App.$('#roleSel').onchange(); modal.show(); };
+      App.$('#userForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var f = this, d = App.formData(f), btn = f.querySelector('[type=submit]');
+        var body = { role: d.role, first_name: d.first_name, last_name: d.last_name, username: d.username, email: d.email, password: d.password, is_active: true };
+        if (d.role === 'Doctor') body.doctor_profile = { specialty: d.specialty, city: d.city };
+        if (d.role === 'Patient') body.patient_profile = { name: (d.first_name + ' ' + d.last_name).trim(), email: d.email || null };
+        App.busy(btn, true);
+        App.post('/users/', body).then(function () { modal.hide(); App.toast(t('تم إنشاء المستخدم', 'User created')); load(); })
+          .catch(function (err) { App.formErrors(f, err); }).finally(function () { App.busy(btn, false); });
+      });
+      load();
+    })();
+  </script>
+</body>
+</html>

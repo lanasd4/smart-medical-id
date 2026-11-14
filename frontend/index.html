@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>الهوية الطبية الذكية</title>
+  <script src="/app/js/head.js"></script>
+</head>
+<body>
+  <div class="smi-auth"><div class="text-center"><img src="/app/icons/icon-192.png" class="smi-auth-logo mb-3" alt="" /><div class="spinner-border text-primary"></div></div></div>
+  <script src="/app/js/core.js"></script>
+  <script>
+    var u = App.user();
+    location.replace(u && localStorage.getItem('smi_refresh') ? App.homeFor(u.role) : '/login.html');
+  </script>
+</body>
+</html>

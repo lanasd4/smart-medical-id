@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Admin">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>سجل العمليات</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="سجل العمليات" data-en-title="Audit log">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2">
+        <input class="form-control" id="search" style="max-width:240px" placeholder="مستخدم أو مورد" data-en-ph="User or resource" />
+        <select class="form-select w-auto" id="action">
+          <option value="" data-en="All actions">كل العمليات</option><option>CREATE</option><option>UPDATE</option><option>DELETE</option><option>VIEW</option><option>LOGIN</option>
+        </select>
+        <input class="form-control w-auto" type="date" id="from" />
+        <input class="form-control w-auto" type="date" id="to" />
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th data-en="Time">الوقت</th><th data-en="User">المستخدم</th><th data-en="Action">العملية</th><th data-en="Resource">المورد</th><th data-en="Details">التفاصيل</th><th>IP</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="card-footer d-flex justify-content-between"><small class="text-muted" id="count"></small><div class="btn-group" id="pager"></div></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, page = 1;
+      var COLOR = { CREATE: 'success', UPDATE: 'info', DELETE: 'danger', VIEW: 'secondary', LOGIN: 'primary', LOGOUT: 'primary' };
+      function load() {
+        App.get('/admin/audit-events/', { search: App.$('#search').value.trim(), action: App.$('#action').value,
+          created_at__date__gte: App.$('#from').value, created_at__date__lte: App.$('#to').value, page: page, page_size: 50 }).then(function (d) {
+          App.$('#rows').innerHTML = d.results.map(function (e) {
+            return '<tr><td class="text-nowrap small">' + esc(App.fmtDateTime(e.created_at)) + '</td><td>' + esc(e.actor_username || t('النظام', 'System')) + '</td>' +
+              '<td><span class="badge bg-label-' + (COLOR[e.action] || 'secondary') + '">' + esc(e.action) + '</span></td><td>' + esc(e.resource) + ' <span class="text-muted">#' + esc(e.resource_id) + '</span></td>' +
+              '<td class="small text-muted">' + esc((e.metadata && e.metadata.details) || '') + '</td><td class="small ltr">' + esc(e.ip || '') + '</td></tr>';
+          }).join('') || '<tr><td colspan="6" class="text-center text-muted py-4">' + esc(t('لا نتائج', 'No results')) + '</td></tr>';
+          App.$('#count').textContent = t(d.count + ' عملية', d.count + ' events');
+          App.$('#pager').innerHTML = (d.previous ? '<button class="btn btn-sm btn-label-secondary" data-p="-1">' + esc(t('السابق', 'Prev')) + '</button>' : '') + (d.next ? '<button class="btn btn-sm btn-label-secondary" data-p="1">' + esc(t('التالي', 'Next')) + '</button>' : '');
+          App.$$('[data-p]').forEach(function (b) { b.onclick = function () { page += +b.dataset.p; load(); }; });
+        });
+      }
+      App.$('#search').addEventListener('input', App.debounce(function () { page = 1; load(); }));
+      ['action', 'from', 'to'].forEach(function (id) { App.$('#' + id).onchange = function () { page = 1; load(); }; });
+      load();
+    })();
+  </script>
+</body>
+</html>

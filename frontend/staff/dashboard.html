@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Doctor,Nurse" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>لوحة التحكم</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="لوحة التحكم" data-en-title="Dashboard">
+    <div class="alert alert-warning d-none" id="setupHint"></div>
+    <div class="row g-4 mb-4" id="stats"></div>
+    <div class="row g-4">
+      <div class="col-xl-7">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0 smi-section-title"><i class="ti ti-inbox"></i><span data-en="Booking requests awaiting approval">طلبات حجز بانتظار الموافقة</span></h5>
+            <a href="/staff/requests.html" class="small" data-en="All">الكل</a>
+          </div>
+          <div class="card-body" id="pending"></div>
+        </div>
+      </div>
+      <div class="col-xl-5">
+        <div class="card h-100">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0 smi-section-title"><i class="ti ti-calendar-time"></i><span data-en="Today's schedule">جدول اليوم</span></h5>
+            <a href="/staff/calendar.html" class="small" data-en="Calendar">التقويم</a>
+          </div>
+          <div class="card-body" id="today"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script src="/app/js/staff.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, role = App.role();
+      function load() {
+        App.get('/dashboard/').then(function (d) {
+          var c = d.counts;
+          var stats = [['ti-calendar-event', 'primary', c.today, t('مواعيد اليوم', 'Today')], ['ti-hourglass', 'warning', c.pending, t('بانتظار الموافقة', 'Pending')],
+            ['ti-calendar-week', 'info', c.week, t('مؤكدة هذا الأسبوع', 'Confirmed this week')], ['ti-users', 'success', c.my_patients, t('مرضاي', 'My patients')]];
+          App.$('#stats').innerHTML = stats.map(function (s) {
+            return '<div class="col-6 col-lg-3"><div class="card smi-stat h-100"><div class="card-body d-flex align-items-center gap-3"><div class="avatar"><span class="avatar-initial rounded bg-label-' + s[1] + '"><i class="ti ' + s[0] + ' ti-md"></i></span></div>' +
+              '<div><h4 class="mb-0">' + s[2] + '</h4><small>' + esc(s[3]) + '</small></div></div></div></div>';
+          }).join('');
+          App.setMenuBadge('pending', c.pending);
+
+          if (role === 'Doctor' && d.profile && !d.profile.availability.length) {
+            var h = App.$('#setupHint');
+            h.innerHTML = '<i class="ti ti-clock-cog me-1"></i>' + esc(t('لم تحدّد أوقات دوامك بعد، لذلك لا يستطيع المرضى الحجز معك. ', 'You have not set working hours yet, so patients cannot book. ')) +
+              '<a href="/staff/availability.html" class="fw-semibold">' + esc(t('حدّدها الآن', 'Set them now')) + '</a>';
+            h.classList.remove('d-none');
+          }
+
+          var pb = App.$('#pending');
+          if (!d.pending.length) App.empty(pb, t('لا توجد طلبات معلّقة 🎉', 'No pending requests 🎉'), 'ti-inbox-off');
+          else { pb.innerHTML = d.pending.map(function (a) { return Staff.requestCard(a, role === 'Nurse'); }).join(''); Staff.bind(pb, load); }
+
+          var tb = App.$('#today');
+          if (!d.today.length) App.empty(tb, t('لا توجد مواعيد اليوم', 'No appointments today'), 'ti-calendar-off');
+          else tb.innerHTML = '<ul class="timeline mb-0">' + d.today.map(function (a) {
+            var color = App.statusColor(a.status);
+            return '<li class="timeline-item timeline-item-transparent" data-appt="' + a.id + '"><span class="timeline-point timeline-point-' + color + '"></span><div class="timeline-event">' +
+              '<div class="timeline-header mb-1"><h6 class="mb-0"><a href="/staff/patient.html?id=' + a.patient + '">' + esc(a.patient_name) + '</a></h6><small class="ltr fw-semibold">' + esc(App.fmtTime(a.start_at)) + '</small></div>' +
+              '<div class="d-flex flex-wrap gap-2 align-items-center">' + App.statusBadge(a.status) + (role === 'Nurse' ? '<small class="text-muted">' + esc(t('د. ', 'Dr. ') + (a.practitioner_full_name || '')) + '</small>' : '') + '</div>' +
+              (a.reason ? '<small class="d-block text-muted mt-1">' + esc(a.reason) + '</small>' : '') +
+              (a.status === 'CONFIRMED' ? '<div class="mt-2 d-flex gap-1"><button class="btn btn-xs btn-sm btn-label-success" data-act="complete"><i class="ti ti-checks ti-xs me-1"></i>' + esc(t('تمت المعاينة', 'Done')) + '</button>' +
+                '<button class="btn btn-sm btn-label-secondary" data-act="no-show">' + esc(t('لم يحضر', 'No-show')) + '</button></div>' : '') +
+              (a.status === 'PENDING' ? '<div class="mt-2 d-flex gap-1"><button class="btn btn-sm btn-success" data-act="approve">' + esc(t('موافقة', 'Approve')) + '</button><button class="btn btn-sm btn-label-danger" data-act="reject">' + esc(t('رفض', 'Reject')) + '</button></div>' : '') +
+              '</div></li>';
+          }).join('') + '</ul>';
+          Staff.bind(tb, load);
+        }).catch(function (e) { App.errorBox(App.$('#pending'), e); });
+      }
+      document.addEventListener('smi:notification', function (e) { if (/APPOINTMENT/.test(e.detail.kind)) load(); });
+      load();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="light-style layout-navbar-fixed layout-menu-fixed layout-compact" data-roles="Doctor,Nurse,Admin" data-css="sweetalert2">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>طلبات الحجز</title>
+  <script src="/app/js/head.js"></script>
+  <script src="/assets/vendor/js/helpers.js"></script>
+</head>
+<body>
+  <main id="page" data-title="طلبات الحجز" data-en-title="Booking requests">
+    <div class="card">
+      <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <ul class="nav nav-pills" id="tabs">
+          <li class="nav-item"><button class="nav-link active" data-status="PENDING"><i class="ti ti-hourglass me-1"></i><span data-en="Pending">بانتظار الموافقة</span> <span class="badge bg-warning rounded-pill ms-1" id="pendingCount"></span></button></li>
+          <li class="nav-item"><button class="nav-link" data-status="CONFIRMED"><span data-en="Confirmed">المؤكدة</span></button></li>
+          <li class="nav-item"><button class="nav-link" data-status="REJECTED,CANCELLED"><span data-en="Rejected / cancelled">المرفوضة والملغاة</span></button></li>
+        </ul>
+        <select class="form-select form-select-sm w-auto" id="doctorFilter"><option value="" data-en="All doctors">كل الأطباء</option></select>
+      </div>
+      <div class="card-body" id="list"></div>
+      <div class="card-footer text-center"><button class="btn btn-sm btn-label-secondary d-none" id="more" data-en="Load more">المزيد</button></div>
+    </div>
+  </main>
+  <script src="/assets/vendor/core.bundle.js"></script>
+  <script src="/assets/vendor/libs/sweetalert2/sweetalert2.js"></script>
+  <script src="/app/js/core.js"></script>
+  <script src="/app/js/shell.js"></script>
+  <script src="/app/js/staff.js"></script>
+  <script>
+    (function () {
+      var t = App.t, esc = App.esc, role = App.role(), status = 'PENDING', page = 1, list = App.$('#list');
+      var me = App.user();
+      // a doctor sees their own requests by default; nurses/admins can filter by doctor
+      var docSel = App.$('#doctorFilter');
+      (role === 'Nurse' ? App.get('/doctors/assisted/') : App.all('/doctors/', { bookable: 1 })).then(function (docs) {
+        docSel.insertAdjacentHTML('beforeend', docs.map(function (d) { return '<option value="' + d.id + '">' + esc(t('د. ', 'Dr. ') + d.full_name) + '</option>'; }).join(''));
+        if (role === 'Doctor' && me.doctor_profile_id) docSel.value = me.doctor_profile_id;
+        load(true);
+      });
+
+      function row(a) {
+        if (a.status === 'PENDING') return Staff.requestCard(a, true);
+        return '<div class="border rounded p-3 mb-3" data-appt="' + a.id + '"><div class="d-flex flex-wrap gap-3 align-items-center">' + App.avatar(a.patient_name, 'secondary') +
+          '<div class="flex-grow-1"><a class="fw-semibold" href="/staff/patient.html?id=' + a.patient + '">' + esc(a.patient_name) + '</a> ' + App.statusBadge(a.status) +
+          '<div class="small mt-1">' + esc(App.fmtDay(a.start_at)) + ' — <span class="ltr fw-semibold">' + esc(App.fmtTime(a.start_at)) + '</span> — ' + esc(t('د. ', 'Dr. ') + (a.practitioner_full_name || '')) + '</div>' +
+          (a.decision_note ? '<div class="small text-muted">' + esc(a.decision_note) + '</div>' : '') +
+          (a.decided_by_name ? '<div class="small text-muted">' + esc(t('بواسطة ', 'by ') + a.decided_by_name) + '</div>' : '') + Staff.triageHtml(a) + '</div>' +
+          (a.status === 'CONFIRMED' && new Date(a.start_at) > new Date() ? '<button class="btn btn-sm btn-label-danger" data-act="cancel">' + esc(t('إلغاء', 'Cancel')) + '</button>' : '') + '</div></div>';
+      }
+      function load(reset) {
+        if (reset) { page = 1; App.spinner(list); }
+        var params = { page: page, doctor: docSel.value, ordering: status === 'PENDING' ? 'start_at' : '-start_at' };
+        if (status.indexOf(',') > 0) params.status__in = status; else params.status = status;
+        if (status !== 'REJECTED,CANCELLED') params.when = 'upcoming';
+        App.get('/appointments/', params).then(function (d) {
+          if (reset) list.innerHTML = '';
+          if (status === 'PENDING') { App.$('#pendingCount').textContent = d.count || ''; App.setMenuBadge('pending', d.count); }
+          if (!d.count) App.empty(list, status === 'PENDING' ? t('لا توجد طلبات معلّقة', 'No pending requests') : t('لا توجد مواعيد', 'Nothing here'), 'ti-inbox-off');
+          list.insertAdjacentHTML('beforeend', d.results.map(row).join(''));
+          App.$('#more').classList.toggle('d-none', !d.next);
+          Staff.bind(list, function () { load(true); });
+        }).catch(function (e) { App.errorBox(list, e); });
+      }
+      App.$$('#tabs .nav-link').forEach(function (b) { b.onclick = function () { App.$$('#tabs .nav-link').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); status = b.dataset.status; load(true); }; });
+      docSel.onchange = function () { load(true); };
+      App.$('#more').onclick = function () { page++; load(false); };
+      document.addEventListener('smi:notification', function (e) { if (/APPOINTMENT/.test(e.detail.kind)) load(true); });
+    })();
+  </script>
+</body>
+</html>
