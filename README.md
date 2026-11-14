@@ -47,7 +47,7 @@ Tests: `.venv\Scripts\python manage.py test core_app`. Optional AI: install [Oll
 > The UI theme is the commercial Vuexy template, which cannot be redistributed; its files are generated
 > locally from a licensed copy by `frontend/tools/build-theme.js`.
 
-© 2026 Lana Mimi — all rights reserved. See [LICENSE](LICENSE).
+© 2026 Lana Samman — all rights reserved. See [LICENSE](LICENSE).
 
 ---
 
