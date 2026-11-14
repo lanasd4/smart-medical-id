@@ -1,5 +1,5 @@
 /* Service worker: network-first pages, cached static assets, API never cached, Web Push. Bump VERSION on deploy. */
-const VERSION = 'smi-v13';
+const VERSION = 'smi-v14';
 const SHELL = [
   '/offline.html',
   '/login.html',

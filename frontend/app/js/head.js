@@ -11,7 +11,7 @@
   d.setAttribute('data-theme', 'theme-default');
   d.setAttribute('data-assets-path', '/assets/');
 
-  var V = '?v=13';
+  var V = '?v=14';
   var css = [
     '/assets/vendor/fonts/tabler-icons.css',
     '/assets/vendor/css/rtl/core' + (dark ? '-dark' : '') + '.css',

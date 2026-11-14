@@ -10,17 +10,17 @@
     Patient: [
       { h: ['هويتي', 'My identity'] },
       { href: '/patient/dashboard.html', icon: 'ti-id-badge-2', t: ['الهوية الطبية', 'Medical ID'], nav: 1 },
-      { href: '/patient/record.html', icon: 'ti-clipboard-heart', t: ['سجلي الطبي', 'My record'], nav: 1 },
+      { href: '/patient/record.html', icon: 'ti-clipboard-heart', t: ['سجلي الطبي', 'My record'], s: 'Record', nav: 1 },
       { h: ['المواعيد', 'Appointments'] },
-      { href: '/patient/doctors.html', icon: 'ti-stethoscope', t: ['دليل الأطباء', 'Find a doctor'], nav: 1 },
-      { href: '/patient/appointments.html', icon: 'ti-calendar-event', t: ['مواعيدي', 'My appointments'], nav: 1 },
+      { href: '/patient/doctors.html', icon: 'ti-stethoscope', t: ['دليل الأطباء', 'Find a doctor'], s: 'Doctors', nav: 1 },
+      { href: '/patient/appointments.html', icon: 'ti-calendar-event', t: ['مواعيدي', 'My appointments'], s: 'Bookings', nav: 1 },
       { h: ['المساعد الذكي', 'Smart assistant'] },
       { href: '/patient/assistant.html', icon: 'ti-message-chatbot', t: ['الدليل الصحي', 'Health guide'], nav: 1 }
     ],
     Doctor: [
       { href: '/staff/dashboard.html', icon: 'ti-smart-home', t: ['لوحة التحكم', 'Dashboard'], nav: 1 },
       { h: ['المواعيد', 'Appointments'] },
-      { href: '/staff/requests.html', icon: 'ti-inbox', t: ['طلبات الحجز', 'Booking requests'], badge: 'pending', nav: 1 },
+      { href: '/staff/requests.html', icon: 'ti-inbox', t: ['طلبات الحجز', 'Booking requests'], s: 'Requests', badge: 'pending', nav: 1 },
       { href: '/staff/calendar.html', icon: 'ti-calendar', t: ['التقويم', 'Calendar'], nav: 1 },
       { href: '/staff/availability.html', icon: 'ti-clock-cog', t: ['أوقات الدوام والإعدادات', 'Working hours'] },
       { h: ['المرضى', 'Patients'] },
@@ -29,16 +29,16 @@
     Nurse: [
       { href: '/staff/dashboard.html', icon: 'ti-smart-home', t: ['لوحة التحكم', 'Dashboard'], nav: 1 },
       { h: ['المواعيد', 'Appointments'] },
-      { href: '/staff/requests.html', icon: 'ti-inbox', t: ['طلبات الحجز', 'Booking requests'], badge: 'pending', nav: 1 },
+      { href: '/staff/requests.html', icon: 'ti-inbox', t: ['طلبات الحجز', 'Booking requests'], s: 'Requests', badge: 'pending', nav: 1 },
       { href: '/staff/calendar.html', icon: 'ti-calendar', t: ['التقويم', 'Calendar'], nav: 1 },
       { h: ['المرضى', 'Patients'] },
       { href: '/staff/patients.html', icon: 'ti-users', t: ['المرضى', 'Patients'], nav: 1 }
     ],
     Admin: [
-      { href: '/admin/dashboard.html', icon: 'ti-chart-pie', t: ['لوحة الإدارة', 'Admin dashboard'], nav: 1 },
+      { href: '/admin/dashboard.html', icon: 'ti-chart-pie', t: ['لوحة الإدارة', 'Admin dashboard'], s: 'Dashboard', nav: 1 },
       { h: ['الإدارة', 'Management'] },
       { href: '/admin/users.html', icon: 'ti-user-cog', t: ['المستخدمون', 'Users'], nav: 1 },
-      { href: '/admin/doctors.html', icon: 'ti-stethoscope', t: ['دليل الأطباء', 'Doctors directory'], badge: 'unverified', nav: 1 },
+      { href: '/admin/doctors.html', icon: 'ti-stethoscope', t: ['دليل الأطباء', 'Doctors directory'], s: 'Doctors', badge: 'unverified', nav: 1 },
       { href: '/admin/audit.html', icon: 'ti-history', t: ['سجل العمليات', 'Audit log'] },
       { h: ['العمل الطبي', 'Clinical'] },
       { href: '/staff/patients.html', icon: 'ti-users', t: ['المرضى', 'Patients'], nav: 1 },
@@ -64,7 +64,7 @@
 
   var navItems = items.filter(function (i) { return i.nav; }).slice(0, 4);
   var bottomNav = '<nav class="smi-bottom-nav d-xl-none">' + navItems.map(function (it) {
-    return '<a href="' + it.href + '" class="' + (here === it.href ? 'active' : '') + '"><i class="ti ' + it.icon + '"></i><span>' + esc(lbl(it.t)) +
+    return '<a href="' + it.href + '" class="' + (here === it.href ? 'active' : '') + '"><i class="ti ' + it.icon + '"></i><span>' + esc(it.s ? t(it.t[0], it.s) : lbl(it.t)) +
       '</span>' + (it.badge ? '<b class="d-none" data-badge="' + it.badge + '"></b>' : '') + '</a>';
   }).join('') + '<a href="javascript:void(0)" class="layout-menu-toggle"><i class="ti ti-menu-2"></i><span>' + esc(t('المزيد', 'More')) + '</span></a></nav>';
 

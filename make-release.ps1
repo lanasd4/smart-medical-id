@@ -29,7 +29,7 @@ $excludeDirs = @('.venv', 'venv', '__pycache__', 'node_modules', '.git', '.idea'
                  (Join-Path $src 'backend\staticfiles'), (Join-Path $src 'loadtest\results'))
 if (-not $IncludeVuexy) { $excludeDirs += (Join-Path $src 'frontend\assets\vendor') }
 $excludeFiles = @('db.sqlite3', 'db.sqlite3-*', 'vapid_private.pem', '.env', '*.pyc', '*.log', 'make-release.ps1',
-                  'دليل-الطالب*')   # private study guide stays local
+                  'دليل-الطالب*', 'مرجعي-الشخصي*')   # private guides stay local
 
 robocopy $src $Output /E /XD $excludeDirs /XF $excludeFiles /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
