@@ -5,6 +5,9 @@
     .\make-release.ps1 -IncludeVuexy      # private repo only: keeps the built Vuexy files
     .\make-release.ps1 -Output D:\out\SmartMedicalID
 
+  If the output folder is already a git repository, its .git history is kept and only the
+  files are replaced; then review with `git status` and commit/push from that folder.
+
   Never copied: virtual env, database + backups, uploaded medical files, push private key,
   caches, load-test results, local secrets (.env), the private study guide.
 #>
@@ -16,8 +19,8 @@ $ErrorActionPreference = 'Stop'
 $src = $PSScriptRoot
 
 if (Test-Path $Output) {
-    if (Test-Path (Join-Path $Output '.git')) { throw "$Output contains a .git folder. Use a new folder (or delete it yourself) so no history is overwritten." }
-    Remove-Item -Recurse -Force $Output
+    # keep the repository history; replace everything else
+    Get-ChildItem $Output -Force | Where-Object { $_.Name -ne '.git' } | Remove-Item -Recurse -Force
 }
 New-Item -ItemType Directory -Force $Output | Out-Null
 
